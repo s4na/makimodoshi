@@ -45,9 +45,13 @@ module Makimodoshi
         Makimodoshi.logger.info("[makimodoshi] DB is ahead of schema.rb by #{excess.size} migration(s): #{excess.join(", ")}")
         Makimodoshi.logger.info("[makimodoshi] Auto-rolling back...")
 
-        Rollbacker.rollback_versions(excess)
+        success = Rollbacker.rollback_versions(excess)
 
-        Makimodoshi.logger.info("[makimodoshi] Auto-rollback complete.")
+        if success
+          Makimodoshi.logger.info("[makimodoshi] Auto-rollback complete.")
+        else
+          Makimodoshi.logger.warn("[makimodoshi] Auto-rollback completed with errors. Some migrations failed to rollback.")
+        end
       end
     end
   end

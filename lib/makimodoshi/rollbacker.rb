@@ -4,9 +4,8 @@ module Makimodoshi
   class Rollbacker
     class << self
       def rollback_versions(versions)
-        versions.each do |version|
-          rollback_one(version)
-        end
+        results = versions.map { |version| rollback_one(version) }
+        results.all?
       end
 
       def rollback_one(version)

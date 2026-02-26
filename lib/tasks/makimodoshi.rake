@@ -70,8 +70,13 @@ namespace :makimodoshi do
       $stdout.puts "[makimodoshi] No excess migrations to rollback."
     else
       $stdout.puts "[makimodoshi] Found #{excess.size} excess migration(s). Rolling back..."
-      Makimodoshi::Rollbacker.rollback_versions(excess)
-      $stdout.puts "[makimodoshi] All excess migrations rolled back."
+      success = Makimodoshi::Rollbacker.rollback_versions(excess)
+      if success
+        $stdout.puts "[makimodoshi] All excess migrations rolled back."
+      else
+        $stderr.puts "[makimodoshi] Some migrations failed to rollback. Check logs for details."
+        exit 1
+      end
     end
   end
 end

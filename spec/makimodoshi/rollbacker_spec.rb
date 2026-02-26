@@ -97,7 +97,7 @@ RSpec.describe Makimodoshi::Rollbacker do
   end
 
   describe ".rollback_versions" do
-    it "rolls back multiple versions in order" do
+    it "rolls back multiple versions in order and returns true on success" do
       version2 = "20240301000000"
       filename2 = "20240301000000_create_comments_for_test.rb"
       source2 = <<~RUBY
@@ -123,10 +123,31 @@ RSpec.describe Makimodoshi::Rollbacker do
         t.timestamps
       end
 
-      described_class.rollback_versions([version2, version])
+      result = described_class.rollback_versions([version2, version])
 
+      expect(result).to be true
       expect(conn.table_exists?(:posts_for_test)).to be false
       expect(conn.table_exists?(:comments_for_test)).to be false
+    end
+
+    it "returns false when any rollback fails" do
+      failing_version = "20240301000000"
+      failing_filename = "20240301000000_failing.rb"
+      failing_source = <<~RUBY
+        class PartialFailMigration < ActiveRecord::Migration[#{migration_version}]
+          def down
+            raise "intentional failure"
+          end
+        end
+      RUBY
+
+      conn = ActiveRecord::Base.connection
+      conn.execute("INSERT INTO schema_migrations (version) VALUES ('#{failing_version}')")
+      Makimodoshi::MigrationStore.store(version: failing_version, filename: failing_filename, source: failing_source)
+
+      result = described_class.rollback_versions([failing_version, version])
+
+      expect(result).to be false
     end
   end
 end

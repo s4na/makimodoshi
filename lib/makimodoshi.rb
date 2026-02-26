@@ -9,6 +9,8 @@ module Makimodoshi
 
   class InvalidMigrationSourceError < StandardError; end
 
+  LOGGER_MUTEX = Mutex.new
+
   class << self
     def development?
       Rails.env.development?
@@ -18,7 +20,9 @@ module Makimodoshi
       if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
         Rails.logger
       else
-        @fallback_logger ||= Logger.new($stdout)
+        LOGGER_MUTEX.synchronize do
+          @fallback_logger ||= Logger.new($stdout)
+        end
       end
     end
   end
