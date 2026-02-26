@@ -58,7 +58,8 @@ RSpec.configure do |config|
       if klass.is_a?(Class) && klass < ActiveRecord::Migration
         Object.send(:remove_const, const_name)
       end
-    rescue => e # rubocop:disable Lint/SuppressedException
+    rescue => e
+      $stderr.puts "[makimodoshi test cleanup] Failed to remove constant #{const_name}: #{e.message}"
     end
   end
 end

@@ -28,8 +28,8 @@ module Makimodoshi
     end
 
     config.after_initialize do
-      if Makimodoshi.development? && server_process?
-        auto_rollback!
+      if Makimodoshi.development? && Makimodoshi::Railtie.server_process?
+        Makimodoshi::Railtie.auto_rollback!
       end
     end
 

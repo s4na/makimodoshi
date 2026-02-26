@@ -29,10 +29,11 @@ module Makimodoshi
 
         logger.info("[makimodoshi] Rolled back #{version}.")
         true
+      rescue InvalidMigrationSourceError
+        raise
       rescue => e
         logger.error("[makimodoshi] Failed to rollback migration #{version}: #{e.message}")
         logger.error(e.backtrace.first(5).join("\n")) if e.backtrace
-        raise if e.message.include?("Invalid migration source")
         false
       end
 
@@ -55,7 +56,12 @@ module Makimodoshi
 
       def validate_migration_source!(source, version)
         unless source.match?(/\A\s*class\s+\w+\s*<\s*ActiveRecord::Migration/)
-          raise "Invalid migration source for #{version}: does not look like an ActiveRecord::Migration"
+          raise InvalidMigrationSourceError, "Invalid migration source for #{version}: does not look like an ActiveRecord::Migration"
+        end
+
+        # Reject code after the class definition's closing `end`
+        unless source.strip.match?(/\bend\s*\z/)
+          raise InvalidMigrationSourceError, "Invalid migration source for #{version}: contains code after class definition"
         end
       end
 
