@@ -1,2 +1,6 @@
 plan.md
 CLAUDE.md
+Gemfile.lock
+*.gem
+pkg/
+spec/tmp/
