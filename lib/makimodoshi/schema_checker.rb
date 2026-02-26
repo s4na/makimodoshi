@@ -16,8 +16,7 @@ module Makimodoshi
         return nil unless File.exist?(schema_file)
 
         content = File.read(schema_file)
-        match = content.match(/define\(version:\s*(\d+)(?:_\d+)*\s*\)/)
-        match ||= content.match(/define\(version:\s*(\d[\d_]*\d)\s*\)/)
+        match = content.match(/define\(version:\s*([\d_]+)\s*\)/)
 
         return nil unless match
 

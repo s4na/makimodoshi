@@ -34,16 +34,15 @@ module Makimodoshi
       private
 
       def load_migration_class(source, filename, version)
-        # Evaluate the migration source in a clean context
-        eval(source) # rubocop:disable Security/Eval
+        # Extract class name from source code
+        class_name = source.match(/class\s+(\w+)\s*</)&.captures&.first
 
-        # Extract class name from filename (e.g., "20240201000000_create_posts.rb" -> "CreatePosts")
-        class_name = filename
-          .sub(/\A\d+_/, "")
-          .sub(/\.rb\z/, "")
-          .camelize
+        raise "Could not determine migration class name from source for #{version}" unless class_name
 
-        class_name.constantize
+        # Define the class at top-level scope
+        Object.class_eval(source) unless Object.const_defined?(class_name) # rubocop:disable Security/Eval
+
+        Object.const_get(class_name)
       end
 
       def remove_schema_migration(version)
