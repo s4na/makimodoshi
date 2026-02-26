@@ -35,9 +35,12 @@ module Makimodoshi
 
     class << self
       def server_process?
-        # Puma.cli_config is an internal API not guaranteed across Puma versions.
-        # Using respond_to? for graceful degradation if the API is removed.
-        defined?(Rails::Server) || (defined?(Puma) && Puma.respond_to?(:cli_config))
+        # Rails::Server は rails s 経由で定義される
+        # 各 Web サーバの定数も確認し、Puma 以外でも動作するようにする
+        defined?(Rails::Server) ||
+          (defined?(Puma) && Puma.respond_to?(:cli_config)) ||
+          defined?(::Unicorn::HttpServer) ||
+          defined?(::Falcon::Server)
       end
 
       def auto_rollback!
@@ -52,7 +55,11 @@ module Makimodoshi
         if success
           Makimodoshi.logger.info("[makimodoshi] Auto-rollback complete.")
         else
-          Makimodoshi.logger.warn("[makimodoshi] Auto-rollback completed with errors. Some migrations failed to rollback.")
+          Makimodoshi.logger.warn(
+            "[makimodoshi] Auto-rollback completed with errors. " \
+            "Your database may be in an inconsistent state. " \
+            "Run 'rails makimodoshi:status' to check."
+          )
         end
       end
     end

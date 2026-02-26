@@ -15,12 +15,14 @@ module Makimodoshi
         schema_file = Rails.root.join("db", "schema.rb")
         return nil unless File.exist?(schema_file)
 
-        content = File.read(schema_file)
-        match = content.match(/define\(version:\s*([\d_]+)\s*\)/)
+        # define(version: ...) は通常ファイル先頭数行にあるため、
+        # 大規模 schema.rb でもファイル全体を読み込まない
+        File.foreach(schema_file) do |line|
+          match = line.match(/define\(version:\s*([\d_]+)\s*\)/)
+          return match[1].delete("_") if match
+        end
 
-        return nil unless match
-
-        match[1].delete("_")
+        nil
       end
 
       def read_db_versions

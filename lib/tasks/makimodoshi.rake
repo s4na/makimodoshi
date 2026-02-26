@@ -30,24 +30,15 @@ namespace :makimodoshi do
       exit 1
     end
 
-    excess = Makimodoshi::SchemaChecker.excess_versions
-
-    if excess.empty?
-      version = ENV["VERSION"]
-      if version
-        Makimodoshi::Rollbacker.rollback_one(version)
-      else
-        $stdout.puts "[makimodoshi] No excess migrations to rollback."
-      end
+    version = ENV["VERSION"]
+    if version
+      # VERSION 指定時は明示的にそのバージョンをロールバック
+      Makimodoshi::Rollbacker.rollback_one(version)
     else
-      version = ENV["VERSION"]
-      if version
-        unless excess.include?(version)
-          $stderr.puts "[makimodoshi] Version #{version} is not in excess migrations list."
-        end
-        Makimodoshi::Rollbacker.rollback_one(version)
+      excess = Makimodoshi::SchemaChecker.excess_versions
+      if excess.empty?
+        $stdout.puts "[makimodoshi] No excess migrations to rollback."
       else
-        # Rollback one (the most recent excess)
         Makimodoshi::Rollbacker.rollback_one(excess.first)
       end
     end
@@ -81,13 +72,17 @@ namespace :makimodoshi do
   end
 end
 
-# Hook into db:migrate to store migration info
-Rake::Task["db:migrate"].enhance do
-  if defined?(Makimodoshi) && Makimodoshi.development?
-    require "makimodoshi/migration_store"
-    require "makimodoshi/schema_checker"
-    require "makimodoshi/migration_interceptor"
+# Hook into migration tasks to store migration info
+%w[db:migrate db:migrate:up].each do |task_name|
+  next unless Rake::Task.task_defined?(task_name)
 
-    Makimodoshi::MigrationInterceptor.store_all_pending
+  Rake::Task[task_name].enhance do
+    if defined?(Makimodoshi) && Makimodoshi.development?
+      require "makimodoshi/migration_store"
+      require "makimodoshi/schema_checker"
+      require "makimodoshi/migration_interceptor"
+
+      Makimodoshi::MigrationInterceptor.store_all_pending
+    end
   end
 end

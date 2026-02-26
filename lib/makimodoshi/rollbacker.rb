@@ -23,12 +23,12 @@ module Makimodoshi
         migration_instance = migration_class.new
         migration_instance.migrate(:down)
 
-        # Note: If remove_schema_migration or MigrationStore.remove fails after
-        # migrate(:down) succeeds, the DB schema will be rolled back but the
-        # tracking records will remain. This is a known limitation; manual cleanup
-        # of schema_migrations and _makimodoshi_migrations may be needed in that case.
-        remove_schema_migration(version)
-        MigrationStore.remove(version)
+        # DDL 成功後のメタデータ削除をトランザクションでまとめ、
+        # 片方だけ失敗して不整合になるリスクを下げる
+        ActiveRecord::Base.transaction do
+          remove_schema_migration(version)
+          MigrationStore.remove(version)
+        end
 
         logger.info("[makimodoshi] Rolled back #{version}.")
         true
@@ -50,9 +50,17 @@ module Makimodoshi
 
         raise "Could not determine migration class name from source for #{version}" unless class_name
 
-        # Define the class at top-level scope
-        # Source is from our own hidden table, not user input
-        Object.class_eval(source) unless Object.const_defined?(class_name, false) # rubocop:disable Security/Eval
+        unless Object.const_defined?(class_name, false)
+          # Tempfile + load は class_eval より安全:
+          # - ファイルパスがスタックトレースに表示される
+          # - Ruby パーサを経由するため、eval 特有の攻撃ベクタを回避
+          require "tempfile"
+          Tempfile.create(["migration_#{version}_", ".rb"]) do |f|
+            f.write(source)
+            f.flush
+            load f.path
+          end
+        end
 
         Object.const_get(class_name)
       end
@@ -74,7 +82,7 @@ module Makimodoshi
         # we prefer a strict "deny by default" stance over allowing potentially dangerous code.
         # Migrations using these methods in def bodies will need the source to be re-stored
         # without them, or the validation can be extended to be scope-aware if needed.
-        dangerous_pattern = /^\s*(?:system|exec|`|%x|IO\.popen|Kernel\.|Open3\.|eval|instance_eval|class_eval|module_eval|send|public_send|__send__)\b/
+        dangerous_pattern = /^\s*(?:::)?(?:system|exec|`|%x|IO\.popen|Kernel\.|Open3\.|eval|instance_eval|class_eval|module_eval|send|public_send|__send__)\b/
         if source.match?(dangerous_pattern)
           raise InvalidMigrationSourceError, "Invalid migration source for #{version}: contains potentially dangerous method calls"
         end
