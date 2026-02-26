@@ -26,6 +26,8 @@ module Makimodoshi
         end
       end
 
+      # Reset the table existence cache. Intended for use in tests only.
+      # Not synchronized with TABLE_MUTEX because test setup runs single-threaded.
       def reset_table_cache!
         @table_ensured = false
       end

@@ -83,6 +83,18 @@ RSpec.describe Makimodoshi::Rollbacker do
       expect { described_class.rollback_one(version) }.to raise_error(Makimodoshi::InvalidMigrationSourceError)
     end
 
+    it "raises InvalidMigrationSourceError for dangerous method calls in class body" do
+      dangerous_source = <<~RUBY
+        class DangerousMigration < ActiveRecord::Migration[#{migration_version}]
+          system("echo pwned")
+          def down; end
+        end
+      RUBY
+      Makimodoshi::MigrationStore.store(version: version, filename: filename, source: dangerous_source)
+
+      expect { described_class.rollback_one(version) }.to raise_error(Makimodoshi::InvalidMigrationSourceError, /dangerous method calls/)
+    end
+
     it "raises InvalidMigrationSourceError for code after class definition" do
       malicious_source = <<~RUBY
         class TrojanMigration < ActiveRecord::Migration[#{migration_version}]
