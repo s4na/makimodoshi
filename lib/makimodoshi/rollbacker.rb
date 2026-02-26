@@ -13,13 +13,13 @@ module Makimodoshi
         stored = MigrationStore.fetch(version)
 
         if stored.nil?
-          puts "[makimodoshi] WARNING: No stored rollback info for migration #{version}. Skipping."
+          logger.warn("[makimodoshi] WARNING: No stored rollback info for migration #{version}. Skipping.")
           return false
         end
 
         migration_class = load_migration_class(stored["migration_source"], stored["filename"], version)
 
-        puts "[makimodoshi] Rolling back #{version} (#{stored["filename"]})..."
+        logger.info("[makimodoshi] Rolling back #{version} (#{stored["filename"]})...")
 
         migration_instance = migration_class.new
         migration_instance.migrate(:down)
@@ -27,22 +27,35 @@ module Makimodoshi
         remove_schema_migration(version)
         MigrationStore.remove(version)
 
-        puts "[makimodoshi] Rolled back #{version}."
+        logger.info("[makimodoshi] Rolled back #{version}.")
         true
+      rescue => e
+        logger.error("[makimodoshi] ERROR: Failed to rollback migration #{version}: #{e.message}")
+        logger.error(e.backtrace.first(5).join("\n")) if e.backtrace
+        false
       end
 
       private
 
       def load_migration_class(source, filename, version)
+        validate_migration_source!(source, version)
+
         # Extract class name from source code
         class_name = source.match(/class\s+(\w+)\s*</)&.captures&.first
 
         raise "Could not determine migration class name from source for #{version}" unless class_name
 
         # Define the class at top-level scope
+        # Source is from our own hidden table, not user input
         Object.class_eval(source) unless Object.const_defined?(class_name) # rubocop:disable Security/Eval
 
         Object.const_get(class_name)
+      end
+
+      def validate_migration_source!(source, version)
+        unless source.match?(/\A\s*class\s+\w+\s*<\s*ActiveRecord::Migration/)
+          raise "Invalid migration source for #{version}: does not look like an ActiveRecord::Migration"
+        end
       end
 
       def remove_schema_migration(version)
@@ -51,6 +64,10 @@ module Makimodoshi
             ["DELETE FROM schema_migrations WHERE version = ?", version]
           )
         )
+      end
+
+      def logger
+        Makimodoshi.logger
       end
     end
   end

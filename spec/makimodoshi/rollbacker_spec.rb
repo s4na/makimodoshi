@@ -61,6 +61,27 @@ RSpec.describe Makimodoshi::Rollbacker do
       result = described_class.rollback_one(version)
       expect(result).to be false
     end
+
+    it "returns false and logs error when rollback fails" do
+      invalid_source = <<~RUBY
+        class FailingMigration < ActiveRecord::Migration[#{migration_version}]
+          def down
+            raise "intentional failure"
+          end
+        end
+      RUBY
+      Makimodoshi::MigrationStore.store(version: version, filename: filename, source: invalid_source)
+
+      result = described_class.rollback_one(version)
+      expect(result).to be false
+    end
+
+    it "rejects invalid migration source" do
+      Makimodoshi::MigrationStore.store(version: version, filename: filename, source: "puts 'malicious code'")
+
+      result = described_class.rollback_one(version)
+      expect(result).to be false
+    end
   end
 
   describe ".rollback_versions" do

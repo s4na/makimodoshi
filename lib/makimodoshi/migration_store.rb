@@ -4,16 +4,24 @@ module Makimodoshi
   class MigrationStore
     class << self
       def ensure_table!
-        return if connection.table_exists?(HIDDEN_TABLE_NAME)
+        return if @table_ensured
 
-        connection.create_table(HIDDEN_TABLE_NAME, id: false) do |t|
-          t.string :version, null: false
-          t.text :migration_source, null: false
-          t.string :filename, null: false
-          t.datetime :migrated_at, null: false
+        unless connection.table_exists?(HIDDEN_TABLE_NAME)
+          connection.create_table(HIDDEN_TABLE_NAME, id: false) do |t|
+            t.string :version, null: false
+            t.text :migration_source, null: false
+            t.string :filename, null: false
+            t.datetime :migrated_at, null: false
+          end
+
+          connection.add_index(HIDDEN_TABLE_NAME, :version, unique: true)
         end
 
-        connection.add_index(HIDDEN_TABLE_NAME, :version, unique: true)
+        @table_ensured = true
+      end
+
+      def reset_table_cache!
+        @table_ensured = false
       end
 
       def store(version:, filename:, source:)

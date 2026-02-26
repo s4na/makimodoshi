@@ -42,5 +42,15 @@ RSpec.configure do |config|
     end
 
     conn.execute("DELETE FROM schema_migrations")
+
+    # Reset ensure_table! cache so each test starts fresh
+    Makimodoshi::MigrationStore.reset_table_cache!
+  end
+
+  config.after(:each) do
+    # Clean up dynamically defined migration classes to prevent leaks between tests
+    %w[CreatePostsForTest CreateCommentsForTest].each do |class_name|
+      Object.send(:remove_const, class_name) if Object.const_defined?(class_name)
+    end
   end
 end

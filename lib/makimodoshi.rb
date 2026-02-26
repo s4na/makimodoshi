@@ -10,5 +10,13 @@ module Makimodoshi
     def development?
       Rails.env.development?
     end
+
+    def logger
+      if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
+        Rails.logger
+      else
+        @fallback_logger ||= Logger.new($stdout)
+      end
+    end
   end
 end

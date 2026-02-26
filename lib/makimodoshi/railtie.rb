@@ -13,9 +13,11 @@ module Makimodoshi
 
     initializer "makimodoshi.environment_check" do
       unless Makimodoshi.development?
-        puts "[makimodoshi] WARNING: makimodoshi is intended for development environment only. " \
-             "It is currently loaded in '#{Rails.env}' environment. " \
-             "No DB operations will be performed."
+        Makimodoshi.logger.warn(
+          "[makimodoshi] WARNING: makimodoshi is intended for development environment only. " \
+          "It is currently loaded in '#{Rails.env}' environment. " \
+          "No DB operations will be performed."
+        )
       end
     end
 
@@ -26,22 +28,26 @@ module Makimodoshi
     end
 
     config.after_initialize do
-      if Makimodoshi.development? && defined?(Rails::Server)
+      if Makimodoshi.development? && server_process?
         auto_rollback!
       end
     end
 
     class << self
+      def server_process?
+        defined?(Rails::Server) || (defined?(Puma) && Puma.respond_to?(:cli_config))
+      end
+
       def auto_rollback!
         excess = SchemaChecker.excess_versions
         return if excess.empty?
 
-        puts "[makimodoshi] DB is ahead of schema.rb by #{excess.size} migration(s): #{excess.join(", ")}"
-        puts "[makimodoshi] Auto-rolling back..."
+        Makimodoshi.logger.info("[makimodoshi] DB is ahead of schema.rb by #{excess.size} migration(s): #{excess.join(", ")}")
+        Makimodoshi.logger.info("[makimodoshi] Auto-rolling back...")
 
         Rollbacker.rollback_versions(excess)
 
-        puts "[makimodoshi] Auto-rollback complete."
+        Makimodoshi.logger.info("[makimodoshi] Auto-rollback complete.")
       end
     end
   end
