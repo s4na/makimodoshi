@@ -8,13 +8,13 @@ namespace :makimodoshi do
     stored = Makimodoshi::MigrationStore.all_stored
 
     if stored.empty?
-      Makimodoshi.logger.info("[makimodoshi] No stored migrations.")
+      $stdout.puts "[makimodoshi] No stored migrations."
     else
-      Makimodoshi.logger.info("[makimodoshi] Stored migrations:")
-      Makimodoshi.logger.info("  #{"Version".ljust(16)} #{"Filename".ljust(50)} Migrated At")
-      Makimodoshi.logger.info("  #{"-" * 16} #{"-" * 50} #{"-" * 20}")
+      $stdout.puts "[makimodoshi] Stored migrations:"
+      $stdout.puts "  #{"Version".ljust(16)} #{"Filename".ljust(50)} Migrated At"
+      $stdout.puts "  #{"-" * 16} #{"-" * 50} #{"-" * 20}"
       stored.each do |row|
-        Makimodoshi.logger.info("  #{row["version"].ljust(16)} #{row["filename"].ljust(50)} #{row["migrated_at"]}")
+        $stdout.puts "  #{row["version"].ljust(16)} #{row["filename"].ljust(50)} #{row["migrated_at"]}"
       end
     end
   end
@@ -26,7 +26,7 @@ namespace :makimodoshi do
     require "makimodoshi/rollbacker"
 
     unless Makimodoshi.development?
-      Makimodoshi.logger.error("[makimodoshi] ERROR: This command is only available in development environment.")
+      $stderr.puts "[makimodoshi] This command is only available in development environment."
       exit 1
     end
 
@@ -37,13 +37,13 @@ namespace :makimodoshi do
       if version
         Makimodoshi::Rollbacker.rollback_one(version)
       else
-        Makimodoshi.logger.info("[makimodoshi] No excess migrations to rollback.")
+        $stdout.puts "[makimodoshi] No excess migrations to rollback."
       end
     else
       version = ENV["VERSION"]
       if version
         unless excess.include?(version)
-          Makimodoshi.logger.warn("[makimodoshi] WARNING: Version #{version} is not in excess migrations list.")
+          $stderr.puts "[makimodoshi] Version #{version} is not in excess migrations list."
         end
         Makimodoshi::Rollbacker.rollback_one(version)
       else
@@ -60,18 +60,18 @@ namespace :makimodoshi do
     require "makimodoshi/rollbacker"
 
     unless Makimodoshi.development?
-      Makimodoshi.logger.error("[makimodoshi] ERROR: This command is only available in development environment.")
+      $stderr.puts "[makimodoshi] This command is only available in development environment."
       exit 1
     end
 
     excess = Makimodoshi::SchemaChecker.excess_versions
 
     if excess.empty?
-      Makimodoshi.logger.info("[makimodoshi] No excess migrations to rollback.")
+      $stdout.puts "[makimodoshi] No excess migrations to rollback."
     else
-      Makimodoshi.logger.info("[makimodoshi] Found #{excess.size} excess migration(s). Rolling back...")
+      $stdout.puts "[makimodoshi] Found #{excess.size} excess migration(s). Rolling back..."
       Makimodoshi::Rollbacker.rollback_versions(excess)
-      Makimodoshi.logger.info("[makimodoshi] All excess migrations rolled back.")
+      $stdout.puts "[makimodoshi] All excess migrations rolled back."
     end
   end
 end

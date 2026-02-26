@@ -16,7 +16,6 @@ Gem::Specification.new do |spec|
   spec.metadata = {
     "source_code_uri" => "https://github.com/s4na/makimodoshi",
     "bug_tracker_uri" => "https://github.com/s4na/makimodoshi/issues",
-    "changelog_uri" => "https://github.com/s4na/makimodoshi/blob/main/CHANGELOG.md",
     "rubygems_mfa_required" => "true"
   }
 

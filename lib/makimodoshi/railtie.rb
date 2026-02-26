@@ -14,7 +14,7 @@ module Makimodoshi
     initializer "makimodoshi.environment_check" do
       unless Makimodoshi.development?
         Makimodoshi.logger.warn(
-          "[makimodoshi] WARNING: makimodoshi is intended for development environment only. " \
+          "[makimodoshi] makimodoshi is intended for development environment only. " \
           "It is currently loaded in '#{Rails.env}' environment. " \
           "No DB operations will be performed."
         )

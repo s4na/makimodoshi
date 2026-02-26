@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "logger"
 require_relative "makimodoshi/version"
 require_relative "makimodoshi/railtie" if defined?(Rails::Railtie)
 

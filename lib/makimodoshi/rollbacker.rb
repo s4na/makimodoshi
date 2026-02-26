@@ -13,7 +13,7 @@ module Makimodoshi
         stored = MigrationStore.fetch(version)
 
         if stored.nil?
-          logger.warn("[makimodoshi] WARNING: No stored rollback info for migration #{version}. Skipping.")
+          logger.warn("[makimodoshi] No stored rollback info for migration #{version}. Skipping.")
           return false
         end
 
@@ -30,8 +30,9 @@ module Makimodoshi
         logger.info("[makimodoshi] Rolled back #{version}.")
         true
       rescue => e
-        logger.error("[makimodoshi] ERROR: Failed to rollback migration #{version}: #{e.message}")
+        logger.error("[makimodoshi] Failed to rollback migration #{version}: #{e.message}")
         logger.error(e.backtrace.first(5).join("\n")) if e.backtrace
+        raise if e.message.include?("Invalid migration source")
         false
       end
 
@@ -47,7 +48,7 @@ module Makimodoshi
 
         # Define the class at top-level scope
         # Source is from our own hidden table, not user input
-        Object.class_eval(source) unless Object.const_defined?(class_name) # rubocop:disable Security/Eval
+        Object.class_eval(source) unless Object.const_defined?(class_name, false) # rubocop:disable Security/Eval
 
         Object.const_get(class_name)
       end

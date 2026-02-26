@@ -15,11 +15,12 @@ RSpec.describe Makimodoshi::MigrationInterceptor do
   end
 
   describe ".store_all_pending" do
+    let(:migration_version) { "#{ActiveRecord::VERSION::MAJOR}.#{ActiveRecord::VERSION::MINOR}" }
     let(:version) { "20240201000000" }
     let(:filename) { "20240201000000_create_users.rb" }
     let(:source) do
       <<~RUBY
-        class CreateUsers < ActiveRecord::Migration[7.0]
+        class CreateUsers < ActiveRecord::Migration[#{migration_version}]
           def change
             create_table :users do |t|
               t.string :name

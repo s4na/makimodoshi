@@ -76,11 +76,10 @@ RSpec.describe Makimodoshi::Rollbacker do
       expect(result).to be false
     end
 
-    it "rejects invalid migration source" do
+    it "raises error for invalid migration source" do
       Makimodoshi::MigrationStore.store(version: version, filename: filename, source: "puts 'malicious code'")
 
-      result = described_class.rollback_one(version)
-      expect(result).to be false
+      expect { described_class.rollback_one(version) }.to raise_error(RuntimeError, /Invalid migration source/)
     end
   end
 

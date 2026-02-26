@@ -45,12 +45,20 @@ RSpec.configure do |config|
 
     # Reset ensure_table! cache so each test starts fresh
     Makimodoshi::MigrationStore.reset_table_cache!
+
+    # Snapshot constants before each test for leak detection
+    @constants_before = Object.constants.dup
   end
 
   config.after(:each) do
     # Clean up dynamically defined migration classes to prevent leaks between tests
-    %w[CreatePostsForTest CreateCommentsForTest].each do |class_name|
-      Object.send(:remove_const, class_name) if Object.const_defined?(class_name)
+    new_constants = Object.constants - @constants_before
+    new_constants.each do |const_name|
+      klass = Object.const_get(const_name)
+      if klass.is_a?(Class) && klass < ActiveRecord::Migration
+        Object.send(:remove_const, const_name)
+      end
+    rescue => e # rubocop:disable Lint/SuppressedException
     end
   end
 end
