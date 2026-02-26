@@ -3,11 +3,12 @@
 require "spec_helper"
 
 RSpec.describe Makimodoshi::Rollbacker do
+  let(:migration_version) { "#{ActiveRecord::VERSION::MAJOR}.#{ActiveRecord::VERSION::MINOR}" }
   let(:version) { "20240201000000" }
   let(:filename) { "20240201000000_create_posts.rb" }
   let(:source) do
     <<~RUBY
-      class CreatePostsForTest < ActiveRecord::Migration[7.0]
+      class CreatePostsForTest < ActiveRecord::Migration[#{migration_version}]
         def up
           create_table :posts_for_test do |t|
             t.string :title
@@ -67,7 +68,7 @@ RSpec.describe Makimodoshi::Rollbacker do
       version2 = "20240301000000"
       filename2 = "20240301000000_create_comments_for_test.rb"
       source2 = <<~RUBY
-        class CreateCommentsForTest < ActiveRecord::Migration[7.0]
+        class CreateCommentsForTest < ActiveRecord::Migration[#{migration_version}]
           def up
             create_table :comments_for_test do |t|
               t.string :body
