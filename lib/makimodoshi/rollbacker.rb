@@ -67,8 +67,13 @@ module Makimodoshi
           raise InvalidMigrationSourceError, "Invalid migration source for #{version}: contains code after class definition"
         end
 
-        # Reject dangerous top-level method calls inside class body that execute at load time.
+        # Reject dangerous method calls that could execute at class load time.
         # This is defense-in-depth; the source comes from our own hidden table, not user input.
+        # Note: This pattern uses ^ (line start) so it also matches calls inside method bodies
+        # (e.g., `system(...)` in `def up`), which are false positives. This is intentional:
+        # we prefer a strict "deny by default" stance over allowing potentially dangerous code.
+        # Migrations using these methods in def bodies will need the source to be re-stored
+        # without them, or the validation can be extended to be scope-aware if needed.
         dangerous_pattern = /^\s*(?:system|exec|`|%x|IO\.popen|Kernel\.|Open3\.|eval|instance_eval|class_eval|module_eval|send|public_send|__send__)\b/
         if source.match?(dangerous_pattern)
           raise InvalidMigrationSourceError, "Invalid migration source for #{version}: contains potentially dangerous method calls"
