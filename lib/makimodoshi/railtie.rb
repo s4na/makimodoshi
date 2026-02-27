@@ -13,9 +13,11 @@ module Makimodoshi
 
     initializer "makimodoshi.environment_check" do
       unless Makimodoshi.development?
-        puts "[makimodoshi] WARNING: makimodoshi is intended for development environment only. " \
-             "It is currently loaded in '#{Rails.env}' environment. " \
-             "No DB operations will be performed."
+        Makimodoshi.logger.warn(
+          "[makimodoshi] makimodoshi is intended for development environment only. " \
+          "It is currently loaded in '#{Rails.env}' environment. " \
+          "No DB operations will be performed."
+        )
       end
     end
 
@@ -26,22 +28,39 @@ module Makimodoshi
     end
 
     config.after_initialize do
-      if Makimodoshi.development? && defined?(Rails::Server)
-        auto_rollback!
+      if Makimodoshi.development? && Makimodoshi::Railtie.server_process?
+        Makimodoshi::Railtie.auto_rollback!
       end
     end
 
     class << self
+      def server_process?
+        # Rails::Server は rails s 経由で定義される
+        # 各 Web サーバの定数も確認し、Puma 以外でも動作するようにする
+        defined?(Rails::Server) ||
+          (defined?(Puma) && Puma.respond_to?(:cli_config)) ||
+          defined?(::Unicorn::HttpServer) ||
+          defined?(::Falcon::Server)
+      end
+
       def auto_rollback!
         excess = SchemaChecker.excess_versions
         return if excess.empty?
 
-        puts "[makimodoshi] DB is ahead of schema.rb by #{excess.size} migration(s): #{excess.join(", ")}"
-        puts "[makimodoshi] Auto-rolling back..."
+        Makimodoshi.logger.info("[makimodoshi] DB is ahead of schema.rb by #{excess.size} migration(s): #{excess.join(", ")}")
+        Makimodoshi.logger.info("[makimodoshi] Auto-rolling back...")
 
-        Rollbacker.rollback_versions(excess)
+        success = Rollbacker.rollback_versions(excess)
 
-        puts "[makimodoshi] Auto-rollback complete."
+        if success
+          Makimodoshi.logger.info("[makimodoshi] Auto-rollback complete.")
+        else
+          Makimodoshi.logger.warn(
+            "[makimodoshi] Auto-rollback completed with errors. " \
+            "Your database may be in an inconsistent state. " \
+            "Run 'rails makimodoshi:status' to check."
+          )
+        end
       end
     end
   end

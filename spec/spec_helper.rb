@@ -42,5 +42,24 @@ RSpec.configure do |config|
     end
 
     conn.execute("DELETE FROM schema_migrations")
+
+    # Reset ensure_table! cache so each test starts fresh
+    Makimodoshi::MigrationStore.reset_table_cache!
+
+    # Snapshot constants before each test for leak detection
+    @constants_before = Object.constants.dup
+  end
+
+  config.after(:each) do
+    # Clean up dynamically defined migration classes to prevent leaks between tests
+    new_constants = Object.constants - @constants_before
+    new_constants.each do |const_name|
+      klass = Object.const_get(const_name)
+      if klass.is_a?(Class) && klass < ActiveRecord::Migration
+        Object.send(:remove_const, const_name)
+      end
+    rescue => e
+      $stderr.puts "[makimodoshi test cleanup] Failed to remove constant #{const_name}: #{e.message}"
+    end
   end
 end

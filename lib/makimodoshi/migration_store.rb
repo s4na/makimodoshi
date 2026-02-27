@@ -2,18 +2,34 @@
 
 module Makimodoshi
   class MigrationStore
+    TABLE_MUTEX = Mutex.new
+
     class << self
       def ensure_table!
-        return if connection.table_exists?(HIDDEN_TABLE_NAME)
+        return if @table_ensured
 
-        connection.create_table(HIDDEN_TABLE_NAME, id: false) do |t|
-          t.string :version, null: false
-          t.text :migration_source, null: false
-          t.string :filename, null: false
-          t.datetime :migrated_at, null: false
+        TABLE_MUTEX.synchronize do
+          return if @table_ensured
+
+          unless connection.table_exists?(HIDDEN_TABLE_NAME)
+            connection.create_table(HIDDEN_TABLE_NAME, id: false) do |t|
+              t.string :version, null: false
+              t.text :migration_source, null: false
+              t.string :filename, null: false
+              t.datetime :migrated_at, null: false
+            end
+
+            connection.add_index(HIDDEN_TABLE_NAME, :version, unique: true)
+          end
+
+          @table_ensured = true
         end
+      end
 
-        connection.add_index(HIDDEN_TABLE_NAME, :version, unique: true)
+      # Reset the table existence cache. Intended for use in tests only.
+      # Not synchronized with TABLE_MUTEX because test setup runs single-threaded.
+      def reset_table_cache!
+        @table_ensured = false
       end
 
       def store(version:, filename:, source:)

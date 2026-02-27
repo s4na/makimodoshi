@@ -27,7 +27,9 @@ RSpec.describe Makimodoshi::Rollbacker do
     conn = ActiveRecord::Base.connection
 
     # Insert into schema_migrations
-    conn.execute("INSERT INTO schema_migrations (version) VALUES ('#{version}')")
+    conn.execute(ActiveRecord::Base.sanitize_sql_array(
+      ["INSERT INTO schema_migrations (version) VALUES (?)", version]
+    ))
 
     # Store migration info
     Makimodoshi::MigrationStore.store(version: version, filename: filename, source: source)
@@ -51,7 +53,9 @@ RSpec.describe Makimodoshi::Rollbacker do
       conn = ActiveRecord::Base.connection
 
       expect(conn.table_exists?(:posts_for_test)).to be false
-      expect(conn.select_value("SELECT COUNT(*) FROM schema_migrations WHERE version = '#{version}'").to_i).to eq(0)
+      expect(conn.select_value(ActiveRecord::Base.sanitize_sql_array(
+        ["SELECT COUNT(*) FROM schema_migrations WHERE version = ?", version]
+      )).to_i).to eq(0)
       expect(Makimodoshi::MigrationStore.exists?(version)).to be false
     end
 
@@ -61,10 +65,55 @@ RSpec.describe Makimodoshi::Rollbacker do
       result = described_class.rollback_one(version)
       expect(result).to be false
     end
+
+    it "returns false and logs error when rollback fails" do
+      invalid_source = <<~RUBY
+        class FailingMigration < ActiveRecord::Migration[#{migration_version}]
+          def down
+            raise "intentional failure"
+          end
+        end
+      RUBY
+      Makimodoshi::MigrationStore.store(version: version, filename: filename, source: invalid_source)
+
+      expect(Makimodoshi.logger).to receive(:error).at_least(:once)
+      result = described_class.rollback_one(version)
+      expect(result).to be false
+    end
+
+    it "raises InvalidMigrationSourceError for invalid migration source" do
+      Makimodoshi::MigrationStore.store(version: version, filename: filename, source: "puts 'malicious code'")
+
+      expect { described_class.rollback_one(version) }.to raise_error(Makimodoshi::InvalidMigrationSourceError)
+    end
+
+    it "raises InvalidMigrationSourceError for dangerous method calls in class body" do
+      dangerous_source = <<~RUBY
+        class DangerousMigration < ActiveRecord::Migration[#{migration_version}]
+          system("echo pwned")
+          def down; end
+        end
+      RUBY
+      Makimodoshi::MigrationStore.store(version: version, filename: filename, source: dangerous_source)
+
+      expect { described_class.rollback_one(version) }.to raise_error(Makimodoshi::InvalidMigrationSourceError, /dangerous method calls/)
+    end
+
+    it "raises InvalidMigrationSourceError for code after class definition" do
+      malicious_source = <<~RUBY
+        class TrojanMigration < ActiveRecord::Migration[#{migration_version}]
+          def down; end
+        end
+        system("echo pwned")
+      RUBY
+      Makimodoshi::MigrationStore.store(version: version, filename: filename, source: malicious_source)
+
+      expect { described_class.rollback_one(version) }.to raise_error(Makimodoshi::InvalidMigrationSourceError, /contains code after class definition/)
+    end
   end
 
   describe ".rollback_versions" do
-    it "rolls back multiple versions in order" do
+    it "rolls back multiple versions in order and returns true on success" do
       version2 = "20240301000000"
       filename2 = "20240301000000_create_comments_for_test.rb"
       source2 = <<~RUBY
@@ -83,17 +132,46 @@ RSpec.describe Makimodoshi::Rollbacker do
       RUBY
 
       conn = ActiveRecord::Base.connection
-      conn.execute("INSERT INTO schema_migrations (version) VALUES ('#{version2}')")
+      conn.execute(ActiveRecord::Base.sanitize_sql_array(
+        ["INSERT INTO schema_migrations (version) VALUES (?)", version2]
+      ))
       Makimodoshi::MigrationStore.store(version: version2, filename: filename2, source: source2)
       conn.create_table(:comments_for_test) do |t|
         t.string :body
         t.timestamps
       end
 
-      described_class.rollback_versions([version2, version])
+      result = described_class.rollback_versions([version2, version])
 
+      expect(result).to be true
       expect(conn.table_exists?(:posts_for_test)).to be false
       expect(conn.table_exists?(:comments_for_test)).to be false
+    end
+
+    it "returns false when any rollback fails" do
+      failing_version = "20240301000000"
+      failing_filename = "20240301000000_failing.rb"
+      failing_source = <<~RUBY
+        class PartialFailMigration < ActiveRecord::Migration[#{migration_version}]
+          def down
+            raise "intentional failure"
+          end
+        end
+      RUBY
+
+      conn = ActiveRecord::Base.connection
+      conn.execute(ActiveRecord::Base.sanitize_sql_array(
+        ["INSERT INTO schema_migrations (version) VALUES (?)", failing_version]
+      ))
+      Makimodoshi::MigrationStore.store(version: failing_version, filename: failing_filename, source: failing_source)
+
+      result = described_class.rollback_versions([failing_version, version])
+
+      expect(result).to be false
+      # map ensures all versions are attempted even after failure;
+      # verify the second (valid) rollback still executed successfully
+      expect(conn.table_exists?(:posts_for_test)).to be false
+      expect(Makimodoshi::MigrationStore.exists?(version)).to be false
     end
   end
 end
