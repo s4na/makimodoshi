@@ -37,7 +37,9 @@ RSpec.describe Makimodoshi::MigrationInterceptor do
 
     it "stores pending migrations that exist in schema_migrations" do
       conn = ActiveRecord::Base.connection
-      conn.execute("INSERT INTO schema_migrations (version) VALUES ('#{version}')")
+      conn.execute(ActiveRecord::Base.sanitize_sql_array(
+        ["INSERT INTO schema_migrations (version) VALUES (?)", version]
+      ))
 
       described_class.store_all_pending
 
@@ -55,7 +57,9 @@ RSpec.describe Makimodoshi::MigrationInterceptor do
 
     it "skips already stored migrations" do
       conn = ActiveRecord::Base.connection
-      conn.execute("INSERT INTO schema_migrations (version) VALUES ('#{version}')")
+      conn.execute(ActiveRecord::Base.sanitize_sql_array(
+        ["INSERT INTO schema_migrations (version) VALUES (?)", version]
+      ))
       Makimodoshi::MigrationStore.store(version: version, filename: filename, source: "original")
 
       described_class.store_all_pending
@@ -68,7 +72,9 @@ RSpec.describe Makimodoshi::MigrationInterceptor do
       allow(Makimodoshi).to receive(:development?).and_return(false)
 
       conn = ActiveRecord::Base.connection
-      conn.execute("INSERT INTO schema_migrations (version) VALUES ('#{version}')")
+      conn.execute(ActiveRecord::Base.sanitize_sql_array(
+        ["INSERT INTO schema_migrations (version) VALUES (?)", version]
+      ))
 
       described_class.store_all_pending
 

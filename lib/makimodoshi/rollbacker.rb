@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "tempfile"
+
 module Makimodoshi
   class Rollbacker
     class << self
@@ -54,7 +56,6 @@ module Makimodoshi
           # Tempfile + load は class_eval より安全:
           # - ファイルパスがスタックトレースに表示される
           # - Ruby パーサを経由するため、eval 特有の攻撃ベクタを回避
-          require "tempfile"
           Tempfile.create(["migration_#{version}_", ".rb"]) do |f|
             f.write(source)
             f.flush

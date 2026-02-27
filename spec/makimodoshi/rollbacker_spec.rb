@@ -27,7 +27,9 @@ RSpec.describe Makimodoshi::Rollbacker do
     conn = ActiveRecord::Base.connection
 
     # Insert into schema_migrations
-    conn.execute("INSERT INTO schema_migrations (version) VALUES ('#{version}')")
+    conn.execute(ActiveRecord::Base.sanitize_sql_array(
+      ["INSERT INTO schema_migrations (version) VALUES (?)", version]
+    ))
 
     # Store migration info
     Makimodoshi::MigrationStore.store(version: version, filename: filename, source: source)
@@ -51,7 +53,9 @@ RSpec.describe Makimodoshi::Rollbacker do
       conn = ActiveRecord::Base.connection
 
       expect(conn.table_exists?(:posts_for_test)).to be false
-      expect(conn.select_value("SELECT COUNT(*) FROM schema_migrations WHERE version = '#{version}'").to_i).to eq(0)
+      expect(conn.select_value(ActiveRecord::Base.sanitize_sql_array(
+        ["SELECT COUNT(*) FROM schema_migrations WHERE version = ?", version]
+      )).to_i).to eq(0)
       expect(Makimodoshi::MigrationStore.exists?(version)).to be false
     end
 
@@ -128,7 +132,9 @@ RSpec.describe Makimodoshi::Rollbacker do
       RUBY
 
       conn = ActiveRecord::Base.connection
-      conn.execute("INSERT INTO schema_migrations (version) VALUES ('#{version2}')")
+      conn.execute(ActiveRecord::Base.sanitize_sql_array(
+        ["INSERT INTO schema_migrations (version) VALUES (?)", version2]
+      ))
       Makimodoshi::MigrationStore.store(version: version2, filename: filename2, source: source2)
       conn.create_table(:comments_for_test) do |t|
         t.string :body
@@ -154,12 +160,18 @@ RSpec.describe Makimodoshi::Rollbacker do
       RUBY
 
       conn = ActiveRecord::Base.connection
-      conn.execute("INSERT INTO schema_migrations (version) VALUES ('#{failing_version}')")
+      conn.execute(ActiveRecord::Base.sanitize_sql_array(
+        ["INSERT INTO schema_migrations (version) VALUES (?)", failing_version]
+      ))
       Makimodoshi::MigrationStore.store(version: failing_version, filename: failing_filename, source: failing_source)
 
       result = described_class.rollback_versions([failing_version, version])
 
       expect(result).to be false
+      # map ensures all versions are attempted even after failure;
+      # verify the second (valid) rollback still executed successfully
+      expect(conn.table_exists?(:posts_for_test)).to be false
+      expect(Makimodoshi::MigrationStore.exists?(version)).to be false
     end
   end
 end
