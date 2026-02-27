@@ -1,7 +1,6 @@
 # makimodoshi
 
 [![CI](https://github.com/s4na/makimodoshi/actions/workflows/ci.yml/badge.svg)](https://github.com/s4na/makimodoshi/actions/workflows/ci.yml)
-[![Gem Version](https://badge.fury.io/rb/makimodoshi.svg)](https://badge.fury.io/rb/makimodoshi)
 
 **makimodoshi** is a Rails gem that automatically rolls back excess database migrations when starting `rails s`. It solves the common pain point of branch switching leaving behind applied migrations that no longer exist in the current branch.
 
@@ -26,7 +25,7 @@ Add to your `Gemfile` in the **development group**:
 
 ```ruby
 group :development do
-  gem "makimodoshi"
+  gem "makimodoshi", git: "https://github.com/s4na/makimodoshi.git"
 end
 ```
 
@@ -37,6 +36,8 @@ $ bundle install
 ```
 
 That's it. No generators, no initializers, no configuration needed.
+
+> **Note**: This gem is not published on RubyGems. GitHub リポジトリから直接インストールしてください。
 
 ## How It Works
 
