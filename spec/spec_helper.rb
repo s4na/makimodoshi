@@ -7,6 +7,7 @@ require "makimodoshi/migration_store"
 require "makimodoshi/schema_checker"
 require "makimodoshi/rollbacker"
 require "makimodoshi/migration_interceptor"
+require "makimodoshi/schema_diff_detector"
 
 # Setup in-memory SQLite database for testing
 ActiveRecord::Base.establish_connection(adapter: "sqlite3", database: ":memory:")

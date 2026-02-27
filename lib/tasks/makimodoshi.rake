@@ -1,5 +1,50 @@
 # frozen_string_literal: true
 
+desc "Rollback excess migrations until DB schema matches schema.rb"
+task makimodoshi: :environment do
+  require "makimodoshi/schema_checker"
+  require "makimodoshi/schema_diff_detector"
+  require "makimodoshi/migration_store"
+  require "makimodoshi/rollbacker"
+
+  unless Makimodoshi.development?
+    $stderr.puts "[makimodoshi] This command is only available in development environment."
+    exit 1
+  end
+
+  if Makimodoshi::SchemaDiffDetector.schema_matches?
+    $stdout.puts "[makimodoshi] DB schema matches schema.rb. Nothing to do."
+    next
+  end
+
+  $stdout.puts "[makimodoshi] DB schema differs from schema.rb. Rolling back..."
+
+  loop do
+    excess = Makimodoshi::SchemaChecker.excess_versions
+    if excess.empty?
+      if Makimodoshi::SchemaDiffDetector.schema_matches?
+        $stdout.puts "[makimodoshi] Schema now matches. Rollback complete."
+      else
+        $stderr.puts "[makimodoshi] No more excess migrations but schema still differs from schema.rb."
+        $stderr.puts "[makimodoshi] You may need to run 'rails db:migrate' to apply pending migrations."
+        exit 1
+      end
+      break
+    end
+
+    success = Makimodoshi::Rollbacker.rollback_one(excess.first)
+    unless success
+      $stderr.puts "[makimodoshi] Failed to rollback migration #{excess.first}. Check logs for details."
+      exit 1
+    end
+
+    if Makimodoshi::SchemaDiffDetector.schema_matches?
+      $stdout.puts "[makimodoshi] Schema now matches. Rollback complete."
+      break
+    end
+  end
+end
+
 namespace :makimodoshi do
   desc "Show stored migrations available for rollback"
   task status: :environment do
