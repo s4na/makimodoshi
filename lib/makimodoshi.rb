@@ -8,6 +8,7 @@ module Makimodoshi
   HIDDEN_TABLE_NAME = "_makimodoshi_migrations"
 
   class InvalidMigrationSourceError < StandardError; end
+  class MigrationClassLoadError < StandardError; end
 
   LOGGER_MUTEX = Mutex.new
 
