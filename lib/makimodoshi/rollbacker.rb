@@ -34,7 +34,7 @@ module Makimodoshi
 
         logger.info("[makimodoshi] Rolled back #{version}.")
         true
-      rescue InvalidMigrationSourceError
+      rescue InvalidMigrationSourceError, MigrationClassLoadError
         raise
       rescue => e
         logger.error("[makimodoshi] Failed to rollback migration #{version}: #{e.message}")
@@ -50,7 +50,7 @@ module Makimodoshi
         # Extract class name from source code
         class_name = source.match(/class\s+(\w+)\s*</)&.captures&.first
 
-        raise "Could not determine migration class name from source for #{version}" unless class_name
+        raise MigrationClassLoadError, "Could not determine migration class name from source for #{version}" unless class_name
 
         unless Object.const_defined?(class_name, false)
           # Tempfile + load は class_eval より安全:
