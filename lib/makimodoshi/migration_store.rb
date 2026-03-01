@@ -89,7 +89,7 @@ module Makimodoshi
       private
 
       def connection
-        ActiveRecord::Base.connection
+        Makimodoshi.connection
       end
 
       def sanitize(sql, *binds)

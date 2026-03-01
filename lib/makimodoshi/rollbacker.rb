@@ -90,7 +90,7 @@ module Makimodoshi
       end
 
       def remove_schema_migration(version)
-        ActiveRecord::Base.connection.execute(
+        Makimodoshi.connection.execute(
           ActiveRecord::Base.sanitize_sql_array(
             ["DELETE FROM schema_migrations WHERE version = ?", version]
           )
