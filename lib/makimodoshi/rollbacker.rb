@@ -34,7 +34,7 @@ module Makimodoshi
 
         logger.info("[makimodoshi] Rolled back #{version}.")
         true
-      rescue InvalidMigrationSourceError
+      rescue InvalidMigrationSourceError, MigrationClassLoadError
         raise
       rescue => e
         logger.error("[makimodoshi] Failed to rollback migration #{version}: #{e.message}")
@@ -50,7 +50,7 @@ module Makimodoshi
         # Extract class name from source code
         class_name = source.match(/class\s+(\w+)\s*</)&.captures&.first
 
-        raise "Could not determine migration class name from source for #{version}" unless class_name
+        raise MigrationClassLoadError, "Could not determine migration class name from source for #{version}" unless class_name
 
         # 同名クラスが既に定義されている場合は削除して、
         # 正しいバージョンのソースコードからクラスを再定義する。
@@ -96,7 +96,7 @@ module Makimodoshi
       end
 
       def remove_schema_migration(version)
-        ActiveRecord::Base.connection.execute(
+        Makimodoshi.connection.execute(
           ActiveRecord::Base.sanitize_sql_array(
             ["DELETE FROM schema_migrations WHERE version = ?", version]
           )

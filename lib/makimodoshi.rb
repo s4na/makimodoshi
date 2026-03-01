@@ -8,10 +8,19 @@ module Makimodoshi
   HIDDEN_TABLE_NAME = "_makimodoshi_migrations"
 
   class InvalidMigrationSourceError < StandardError; end
+  class MigrationClassLoadError < StandardError; end
 
   LOGGER_MUTEX = Mutex.new
 
   class << self
+    def connection
+      if ActiveRecord::Base.respond_to?(:lease_connection)
+        ActiveRecord::Base.lease_connection
+      else
+        ActiveRecord::Base.connection
+      end
+    end
+
     def development?
       Rails.env.development?
     end

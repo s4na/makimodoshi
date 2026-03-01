@@ -139,6 +139,19 @@ RSpec.describe Makimodoshi::Rollbacker do
       expect(conn.table_exists?(:posts_for_test_v2)).to be false
     end
 
+    it "raises MigrationClassLoadError when class name cannot be determined" do
+      # Create a mutable source string to allow stubbing
+      mutable_source = +source.dup
+      allow(Makimodoshi::MigrationStore).to receive(:fetch).with(version).and_return(
+        "migration_source" => mutable_source,
+        "filename" => filename
+      )
+      # Stub match so validation passes (via match?) but class_name extraction returns nil
+      allow(mutable_source).to receive(:match).with(/class\s+(\w+)\s*</).and_return(nil)
+
+      expect { described_class.rollback_one(version) }.to raise_error(Makimodoshi::MigrationClassLoadError)
+    end
+
     it "raises InvalidMigrationSourceError for code after class definition" do
       malicious_source = <<~RUBY
         class TrojanMigration < ActiveRecord::Migration[#{migration_version}]

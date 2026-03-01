@@ -19,6 +19,8 @@ task makimodoshi: :environment do
 
   $stdout.puts "[makimodoshi] DB schema differs from schema.rb. Rolling back..."
 
+  previous_excess_first = nil
+
   loop do
     excess = Makimodoshi::SchemaChecker.excess_versions
     if excess.empty?
@@ -31,6 +33,12 @@ task makimodoshi: :environment do
       end
       break
     end
+
+    if excess.first == previous_excess_first
+      $stderr.puts "[makimodoshi] Rollback did not reduce excess migrations. Aborting to prevent infinite loop."
+      exit 1
+    end
+    previous_excess_first = excess.first
 
     success = Makimodoshi::Rollbacker.rollback_one(excess.first)
     unless success
