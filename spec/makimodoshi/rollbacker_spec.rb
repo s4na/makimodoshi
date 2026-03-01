@@ -44,6 +44,7 @@ RSpec.describe Makimodoshi::Rollbacker do
   after do
     conn = ActiveRecord::Base.connection
     conn.drop_table(:posts_for_test) if conn.table_exists?(:posts_for_test)
+    conn.drop_table(:posts_for_test_v2) if conn.table_exists?(:posts_for_test_v2)
   end
 
   describe ".rollback_one" do
@@ -97,6 +98,45 @@ RSpec.describe Makimodoshi::Rollbacker do
       Makimodoshi::MigrationStore.store(version: version, filename: filename, source: dangerous_source)
 
       expect { described_class.rollback_one(version) }.to raise_error(Makimodoshi::InvalidMigrationSourceError, /dangerous method calls/)
+    end
+
+    it "handles class name collision by reloading from correct source" do
+      # Create a second migration with the same class name but different behavior
+      version2 = "20240301000000"
+      filename2 = "20240301000000_create_posts_for_test.rb"
+      source2 = <<~RUBY
+        class CreatePostsForTest < ActiveRecord::Migration[#{migration_version}]
+          def up
+            create_table :posts_for_test_v2 do |t|
+              t.string :title
+              t.timestamps
+            end
+          end
+
+          def down
+            drop_table :posts_for_test_v2
+          end
+        end
+      RUBY
+
+      conn = ActiveRecord::Base.connection
+      conn.execute(ActiveRecord::Base.sanitize_sql_array(
+        ["INSERT INTO schema_migrations (version) VALUES (?)", version2]
+      ))
+      Makimodoshi::MigrationStore.store(version: version2, filename: filename2, source: source2)
+      conn.create_table(:posts_for_test_v2) do |t|
+        t.string :title
+        t.timestamps
+      end
+
+      # Rollback the first version (which defines CreatePostsForTest)
+      described_class.rollback_one(version)
+      expect(conn.table_exists?(:posts_for_test)).to be false
+
+      # Now rollback the second version (same class name, different behavior)
+      # This should reload the class with the new source, not use the old definition
+      described_class.rollback_one(version2)
+      expect(conn.table_exists?(:posts_for_test_v2)).to be false
     end
 
     it "raises InvalidMigrationSourceError for code after class definition" do

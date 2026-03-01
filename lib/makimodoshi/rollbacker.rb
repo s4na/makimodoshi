@@ -52,15 +52,21 @@ module Makimodoshi
 
         raise "Could not determine migration class name from source for #{version}" unless class_name
 
-        unless Object.const_defined?(class_name, false)
-          # Tempfile + load は class_eval より安全:
-          # - ファイルパスがスタックトレースに表示される
-          # - Ruby パーサを経由するため、eval 特有の攻撃ベクタを回避
-          Tempfile.create(["migration_#{version}_", ".rb"]) do |f|
-            f.write(source)
-            f.flush
-            load f.path
-          end
+        # 同名クラスが既に定義されている場合は削除して、
+        # 正しいバージョンのソースコードからクラスを再定義する。
+        # これにより、異なるバージョンで同じクラス名（例: AddColumnToUsers）を
+        # 使っている場合の名前衝突を防ぐ。
+        if Object.const_defined?(class_name, false)
+          Object.send(:remove_const, class_name)
+        end
+
+        # Tempfile + load は class_eval より安全:
+        # - ファイルパスがスタックトレースに表示される
+        # - Ruby パーサを経由するため、eval 特有の攻撃ベクタを回避
+        Tempfile.create(["migration_#{version}_", ".rb"]) do |f|
+          f.write(source)
+          f.flush
+          load f.path
         end
 
         Object.const_get(class_name)
