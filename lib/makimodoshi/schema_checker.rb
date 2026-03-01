@@ -26,9 +26,9 @@ module Makimodoshi
       end
 
       def read_db_versions
-        return [] unless ActiveRecord::Base.connection.table_exists?("schema_migrations")
+        return [] unless Makimodoshi.connection.table_exists?("schema_migrations")
 
-        ActiveRecord::Base.connection
+        Makimodoshi.connection
           .select_values("SELECT version FROM schema_migrations")
           .map(&:to_s)
       end
