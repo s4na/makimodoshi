@@ -11,6 +11,33 @@ module Makimodoshi
         db_versions.select { |v| v > schema_version }.sort.reverse
       end
 
+      # excess_versions のうち、マイグレーションファイルが存在しないものだけを返す。
+      # ファイルが存在する = 通常の db:migrate 実行直後なのでロールバック不要。
+      def orphan_versions
+        excess_versions.reject { |v| migration_file_exists?(v) }
+      end
+
+      # 指定バージョンのマイグレーションファイルが db/migrate/ に存在するか
+      def migration_file_exists?(version)
+        Dir[Rails.root.join("db", "migrate", "#{version}_*.rb")].any?
+      end
+
+      # schema.rb が git の HEAD と比較して変更されているか。
+      # git管理外のプロジェクトでは false を返す（安全側に倒す）。
+      def schema_file_changed_from_git?
+        schema_file = Rails.root.join("db", "schema.rb")
+        return false unless File.exist?(schema_file)
+
+        diff = git_diff_schema
+        diff != nil && diff.strip.length > 0
+      end
+
+      # git diff の実行を分離（テスト時にスタブしやすくする）
+      def git_diff_schema
+        output = `git -C #{Rails.root} diff HEAD -- db/schema.rb 2>/dev/null`
+        $?.success? ? output : nil
+      end
+
       def read_schema_version
         schema_file = Rails.root.join("db", "schema.rb")
         return nil unless File.exist?(schema_file)
