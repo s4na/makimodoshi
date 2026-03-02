@@ -5,16 +5,6 @@ require "open3"
 module Makimodoshi
   class SchemaChecker
     class << self
-      # orphan migration の有無と git diff の状態から、自動ロールバックすべきか判定する。
-      # ロールバック対象の orphan versions を返す。ロールバック不要なら nil を返す。
-      def should_auto_rollback?
-        orphans = orphan_versions
-        return nil if orphans.empty?
-        return nil unless schema_file_changed_from_git?
-
-        orphans
-      end
-
       # excess_versions のうち、マイグレーションファイルが存在しないものだけを返す。
       # ファイルが存在する = 通常の db:migrate 実行直後なのでロールバック不要。
       def orphan_versions
@@ -57,7 +47,7 @@ module Makimodoshi
       def git_diff_schema
         output, status = Open3.capture2(
           "git", "-C", Rails.root.to_s, "diff", "HEAD", "--", "db/schema.rb",
-          err: File::NULL
+          err: File::NULL # git管理外ディレクトリでのエラーメッセージを抑制
         )
         status.success? ? output : nil
       end

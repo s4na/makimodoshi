@@ -12,8 +12,8 @@ task makimodoshi: :environment do
     exit 1
   end
 
-  orphans = Makimodoshi::SchemaChecker.orphan_versions
-  if orphans.empty?
+  initial_orphans = Makimodoshi::SchemaChecker.orphan_versions
+  if initial_orphans.empty?
     $stdout.puts "[makimodoshi] No orphan migrations (all excess migrations have files). Nothing to do."
     next
   end
@@ -23,7 +23,7 @@ task makimodoshi: :environment do
     next
   end
 
-  $stdout.puts "[makimodoshi] schema.rb has git diff and #{orphans.size} orphan migration(s) without files."
+  $stdout.puts "[makimodoshi] schema.rb has git diff and #{initial_orphans.size} orphan migration(s) without files."
   $stdout.puts "[makimodoshi] Rolling back to align with git schema..."
 
   previous_orphan_first = nil

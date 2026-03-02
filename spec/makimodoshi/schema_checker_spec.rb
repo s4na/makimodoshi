@@ -151,6 +151,82 @@ RSpec.describe Makimodoshi::SchemaChecker do
     end
   end
 
+  # auto_rollback! の判定ロジックに関連する統合シナリオ。
+  # orphan_versions と schema_file_changed_from_git? の組み合わせによって
+  # ロールバック要否が決まることを確認する。
+  describe "auto rollback scenarios" do
+    let(:migrate_dir) { Rails.root.join("db", "migrate") }
+
+    before do
+      FileUtils.mkdir_p(migrate_dir)
+      File.write(schema_file, <<~RUBY)
+        ActiveRecord::Schema[7.0].define(version: 20240101000000) do
+        end
+      RUBY
+    end
+
+    after do
+      FileUtils.rm_rf(migrate_dir)
+    end
+
+    context "excess versions があるがすべてマイグレーションファイルが存在する場合" do
+      before do
+        conn = ActiveRecord::Base.connection
+        conn.execute("INSERT INTO schema_migrations (version) VALUES ('20240101000000')")
+        conn.execute("INSERT INTO schema_migrations (version) VALUES ('20240201000000')")
+        File.write(migrate_dir.join("20240201000000_create_users.rb"), "")
+      end
+
+      it "orphan_versions が空のためロールバック不要" do
+        expect(described_class.orphan_versions).to be_empty
+      end
+    end
+
+    context "orphan migrations があるが schema.rb に git diff がない場合" do
+      before do
+        conn = ActiveRecord::Base.connection
+        conn.execute("INSERT INTO schema_migrations (version) VALUES ('20240101000000')")
+        conn.execute("INSERT INTO schema_migrations (version) VALUES ('20240201000000')")
+        allow(described_class).to receive(:git_diff_schema).and_return("")
+      end
+
+      it "orphan_versions は検出されるが git diff がないためロールバックすべきでない" do
+        expect(described_class.orphan_versions).to eq(["20240201000000"])
+        expect(described_class.schema_file_changed_from_git?).to be false
+      end
+    end
+
+    context "orphan migrations があり schema.rb に git diff がある場合" do
+      before do
+        conn = ActiveRecord::Base.connection
+        conn.execute("INSERT INTO schema_migrations (version) VALUES ('20240101000000')")
+        conn.execute("INSERT INTO schema_migrations (version) VALUES ('20240201000000')")
+        allow(described_class).to receive(:git_diff_schema).and_return("diff --git ...")
+      end
+
+      it "orphan_versions が検出され git diff もあるためロールバック対象" do
+        expect(described_class.orphan_versions).to eq(["20240201000000"])
+        expect(described_class.schema_file_changed_from_git?).to be true
+      end
+    end
+
+    context "excess versions のうち一部のみ orphan の場合" do
+      before do
+        conn = ActiveRecord::Base.connection
+        conn.execute("INSERT INTO schema_migrations (version) VALUES ('20240101000000')")
+        conn.execute("INSERT INTO schema_migrations (version) VALUES ('20240201000000')")
+        conn.execute("INSERT INTO schema_migrations (version) VALUES ('20240301000000')")
+        File.write(migrate_dir.join("20240201000000_create_users.rb"), "")
+        allow(described_class).to receive(:git_diff_schema).and_return("diff --git ...")
+      end
+
+      it "orphan のみがロールバック対象になる" do
+        expect(described_class.orphan_versions).to eq(["20240301000000"])
+        expect(described_class.schema_file_changed_from_git?).to be true
+      end
+    end
+  end
+
   describe ".schema_file_changed_from_git?" do
     it "returns false when schema.rb does not exist" do
       FileUtils.rm_f(schema_file)
