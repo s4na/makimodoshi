@@ -95,6 +95,10 @@ namespace :makimodoshi do
       # VERSION 指定時は明示的にそのバージョンをロールバック
       Makimodoshi::Rollbacker.rollback_one(version)
     else
+      # 単体ロールバックは手動操作（ユーザーが意図的に実行）のため、
+      # schema_file_changed_from_git? チェックは省略する。
+      # 自動ロールバック（auto_rollback!、makimodoshi タスク、rollback_all）では
+      # git diff チェックを行い、意図しないロールバックを防止している。
       orphans = Makimodoshi::SchemaChecker.orphan_versions
       if orphans.empty?
         $stdout.puts "[makimodoshi] No orphan migrations to rollback."

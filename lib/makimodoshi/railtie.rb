@@ -48,7 +48,7 @@ module Makimodoshi
         return if orphans.empty?
 
         unless SchemaChecker.schema_file_changed_from_git?
-          Makimodoshi.logger.debug(
+          Makimodoshi.logger.info(
             "[makimodoshi] Orphan migrations found (#{orphans.join(", ")}), " \
             "but schema.rb has no git diff. Skipping rollback."
           )

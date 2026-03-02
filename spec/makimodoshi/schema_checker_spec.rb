@@ -100,6 +100,14 @@ RSpec.describe Makimodoshi::SchemaChecker do
     it "returns false when migration file does not exist" do
       expect(described_class.migration_file_exists?("20240201000000")).to be false
     end
+
+    it "raises ArgumentError for non-numeric version" do
+      expect { described_class.migration_file_exists?("abc") }.to raise_error(ArgumentError, /numeric string/)
+    end
+
+    it "raises ArgumentError for empty string" do
+      expect { described_class.migration_file_exists?("") }.to raise_error(ArgumentError, /numeric string/)
+    end
   end
 
   describe ".orphan_versions" do

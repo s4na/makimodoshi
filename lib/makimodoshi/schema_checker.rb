@@ -21,6 +21,8 @@ module Makimodoshi
 
       # 指定バージョンのマイグレーションファイルが db/migrate/ に存在するか
       def migration_file_exists?(version)
+        raise ArgumentError, "version must be a numeric string" unless version.to_s.match?(/\A\d+\z/)
+
         Dir.glob(Rails.root.join("db", "migrate", "#{version}_*.rb")).any?
       end
 
@@ -35,6 +37,12 @@ module Makimodoshi
       end
 
       # git diff の実行を分離（テスト時にスタブしやすくする）
+      #
+      # `git diff HEAD` はワーキングツリーと HEAD の差分を比較する。
+      # ブランチ切り替え直後は HEAD が切り替え先ブランチを指すため、
+      # 切り替え先の schema.rb と HEAD が一致し diff が空になる場合がある。
+      # ただし、その場合でも orphan migration は excess_versions から
+      # 正しく検出されるため、次回の schema.rb 変更時にロールバックされる。
       def git_diff_schema
         output, status = Open3.capture2(
           "git", "-C", Rails.root.to_s, "diff", "HEAD", "--", "db/schema.rb",

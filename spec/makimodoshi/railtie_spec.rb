@@ -26,7 +26,13 @@ RSpec.describe "Makimodoshi::Railtie.auto_rollback!" do
   end
 
   # auto_rollback! のロジックを再現するヘルパー
-  # Railtie 本体は Rails::Railtie 継承が必要なため、ロジックだけ抽出してテスト
+  #
+  # 制約: Railtie 本体は Rails::Railtie 継承が必要であり、テスト環境での
+  # 完全な初期化が困難なため、ロジックだけ抽出してテストしている。
+  # auto_rollback! 本体のロジックを変更した場合は、このヘルパーも
+  # 必ず同期して更新すること。
+  # TODO: Railtie の初期化なしに auto_rollback! を直接呼び出せる構成への
+  #       リファクタリングを検討する。
   def auto_rollback_logic
     orphans = Makimodoshi::SchemaChecker.orphan_versions
     return :no_orphans if orphans.empty?
