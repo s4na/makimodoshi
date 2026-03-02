@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-desc "Rollback excess migrations until DB schema matches schema.rb"
+desc "Rollback orphan migrations (no migration file) to align DB schema with git"
 task makimodoshi: :environment do
   require "makimodoshi/schema_checker"
   require "makimodoshi/schema_diff_detector"
@@ -12,37 +12,43 @@ task makimodoshi: :environment do
     exit 1
   end
 
-  if Makimodoshi::SchemaDiffDetector.schema_matches?
-    $stdout.puts "[makimodoshi] DB schema matches schema.rb. Nothing to do."
+  initial_orphans, reason = Makimodoshi::SchemaChecker.check_auto_rollback_preconditions
+  if reason == :no_orphans
+    $stdout.puts "[makimodoshi] No orphan migrations (all excess migrations have files). Nothing to do."
+    next
+  elsif reason == :no_git_diff
+    $stdout.puts "[makimodoshi] Orphan migrations found but schema.rb has no git diff. Nothing to do."
     next
   end
 
-  $stdout.puts "[makimodoshi] DB schema differs from schema.rb. Rolling back..."
+  $stdout.puts "[makimodoshi] schema.rb has git diff and #{initial_orphans.size} orphan migration(s) without files."
+  $stdout.puts "[makimodoshi] Rolling back to align with git schema..."
 
-  previous_excess_first = nil
+  previous_orphan_first = nil
 
   loop do
-    excess = Makimodoshi::SchemaChecker.excess_versions
-    if excess.empty?
+    # ロールバック後のDB状態を反映するため、毎回再取得する
+    orphans = Makimodoshi::SchemaChecker.orphan_versions
+    if orphans.empty?
       if Makimodoshi::SchemaDiffDetector.schema_matches?
         $stdout.puts "[makimodoshi] Schema now matches. Rollback complete."
       else
-        $stderr.puts "[makimodoshi] No more excess migrations but schema still differs from schema.rb."
+        $stderr.puts "[makimodoshi] No more orphan migrations but schema still differs from schema.rb."
         $stderr.puts "[makimodoshi] You may need to run 'rails db:migrate' to apply pending migrations."
         exit 1
       end
       break
     end
 
-    if excess.first == previous_excess_first
-      $stderr.puts "[makimodoshi] Rollback did not reduce excess migrations. Aborting to prevent infinite loop."
+    if orphans.first == previous_orphan_first
+      $stderr.puts "[makimodoshi] Rollback did not reduce orphan migrations. Aborting to prevent infinite loop."
       exit 1
     end
-    previous_excess_first = excess.first
+    previous_orphan_first = orphans.first
 
-    success = Makimodoshi::Rollbacker.rollback_one(excess.first)
+    success = Makimodoshi::Rollbacker.rollback_one(orphans.first)
     unless success
-      $stderr.puts "[makimodoshi] Failed to rollback migration #{excess.first}. Check logs for details."
+      $stderr.puts "[makimodoshi] Failed to rollback migration #{orphans.first}. Check logs for details."
       exit 1
     end
 
@@ -72,7 +78,7 @@ namespace :makimodoshi do
     end
   end
 
-  desc "Rollback the most recent excess migration"
+  desc "Rollback the most recent orphan migration (no migration file)"
   task rollback: :environment do
     require "makimodoshi/schema_checker"
     require "makimodoshi/migration_store"
@@ -88,16 +94,20 @@ namespace :makimodoshi do
       # VERSION 指定時は明示的にそのバージョンをロールバック
       Makimodoshi::Rollbacker.rollback_one(version)
     else
-      excess = Makimodoshi::SchemaChecker.excess_versions
-      if excess.empty?
-        $stdout.puts "[makimodoshi] No excess migrations to rollback."
+      # 単体ロールバックは手動操作（ユーザーが意図的に実行）のため、
+      # schema_file_changed_from_git? チェックは省略する。
+      # 自動ロールバック（auto_rollback!、makimodoshi タスク、rollback_all）では
+      # git diff チェックを行い、意図しないロールバックを防止している。
+      orphans = Makimodoshi::SchemaChecker.orphan_versions
+      if orphans.empty?
+        $stdout.puts "[makimodoshi] No orphan migrations to rollback."
       else
-        Makimodoshi::Rollbacker.rollback_one(excess.first)
+        Makimodoshi::Rollbacker.rollback_one(orphans.first)
       end
     end
   end
 
-  desc "Rollback all excess migrations (DB ahead of schema.rb)"
+  desc "Rollback all orphan migrations (no migration file, DB ahead of schema.rb)"
   task rollback_all: :environment do
     require "makimodoshi/schema_checker"
     require "makimodoshi/migration_store"
@@ -108,19 +118,22 @@ namespace :makimodoshi do
       exit 1
     end
 
-    excess = Makimodoshi::SchemaChecker.excess_versions
+    orphans, reason = Makimodoshi::SchemaChecker.check_auto_rollback_preconditions
+    if reason == :no_orphans
+      $stdout.puts "[makimodoshi] No orphan migrations to rollback."
+      next
+    elsif reason == :no_git_diff
+      $stdout.puts "[makimodoshi] Orphan migrations found but schema.rb has no git diff. Nothing to do."
+      next
+    end
 
-    if excess.empty?
-      $stdout.puts "[makimodoshi] No excess migrations to rollback."
+    $stdout.puts "[makimodoshi] Found #{orphans.size} orphan migration(s). Rolling back..."
+    success = Makimodoshi::Rollbacker.rollback_versions(orphans)
+    if success
+      $stdout.puts "[makimodoshi] All orphan migrations rolled back."
     else
-      $stdout.puts "[makimodoshi] Found #{excess.size} excess migration(s). Rolling back..."
-      success = Makimodoshi::Rollbacker.rollback_versions(excess)
-      if success
-        $stdout.puts "[makimodoshi] All excess migrations rolled back."
-      else
-        $stderr.puts "[makimodoshi] Some migrations failed to rollback. Check logs for details."
-        exit 1
-      end
+      $stderr.puts "[makimodoshi] Some migrations failed to rollback. Check logs for details."
+      exit 1
     end
   end
 end

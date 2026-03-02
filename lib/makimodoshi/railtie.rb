@@ -44,13 +44,24 @@ module Makimodoshi
       end
 
       def auto_rollback!
-        excess = SchemaChecker.excess_versions
-        return if excess.empty?
+        orphans, reason = SchemaChecker.check_auto_rollback_preconditions
+        if reason
+          if reason == :no_git_diff
+            Makimodoshi.logger.info(
+              "[makimodoshi] Orphan migrations found (#{orphans.join(", ")}), " \
+              "but schema.rb has no git diff. Skipping rollback."
+            )
+          end
+          return
+        end
 
-        Makimodoshi.logger.info("[makimodoshi] DB is ahead of schema.rb by #{excess.size} migration(s): #{excess.join(", ")}")
-        Makimodoshi.logger.info("[makimodoshi] Auto-rolling back...")
+        Makimodoshi.logger.info(
+          "[makimodoshi] schema.rb has git diff and #{orphans.size} orphan migration(s) " \
+          "without files: #{orphans.join(", ")}"
+        )
+        Makimodoshi.logger.info("[makimodoshi] Auto-rolling back to align with git schema...")
 
-        success = Rollbacker.rollback_versions(excess)
+        success = Rollbacker.rollback_versions(orphans)
 
         if success
           Makimodoshi.logger.info("[makimodoshi] Auto-rollback complete.")
