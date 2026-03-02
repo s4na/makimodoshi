@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "open3"
+
 module Makimodoshi
   class SchemaChecker
     class << self
@@ -19,7 +21,7 @@ module Makimodoshi
 
       # 指定バージョンのマイグレーションファイルが db/migrate/ に存在するか
       def migration_file_exists?(version)
-        Dir[Rails.root.join("db", "migrate", "#{version}_*.rb")].any?
+        Dir.glob(Rails.root.join("db", "migrate", "#{version}_*.rb")).any?
       end
 
       # schema.rb が git の HEAD と比較して変更されているか。
@@ -29,13 +31,16 @@ module Makimodoshi
         return false unless File.exist?(schema_file)
 
         diff = git_diff_schema
-        diff != nil && diff.strip.length > 0
+        !diff.nil? && !diff.strip.empty?
       end
 
       # git diff の実行を分離（テスト時にスタブしやすくする）
       def git_diff_schema
-        output = `git -C #{Rails.root} diff HEAD -- db/schema.rb 2>/dev/null`
-        $?.success? ? output : nil
+        output, status = Open3.capture2(
+          "git", "-C", Rails.root.to_s, "diff", "HEAD", "--", "db/schema.rb",
+          err: File::NULL
+        )
+        status.success? ? output : nil
       end
 
       def read_schema_version

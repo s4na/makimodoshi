@@ -79,7 +79,7 @@ namespace :makimodoshi do
     end
   end
 
-  desc "Rollback the most recent excess migration"
+  desc "Rollback the most recent orphan migration (no migration file)"
   task rollback: :environment do
     require "makimodoshi/schema_checker"
     require "makimodoshi/migration_store"
@@ -95,11 +95,11 @@ namespace :makimodoshi do
       # VERSION 指定時は明示的にそのバージョンをロールバック
       Makimodoshi::Rollbacker.rollback_one(version)
     else
-      excess = Makimodoshi::SchemaChecker.excess_versions
-      if excess.empty?
-        $stdout.puts "[makimodoshi] No excess migrations to rollback."
+      orphans = Makimodoshi::SchemaChecker.orphan_versions
+      if orphans.empty?
+        $stdout.puts "[makimodoshi] No orphan migrations to rollback."
       else
-        Makimodoshi::Rollbacker.rollback_one(excess.first)
+        Makimodoshi::Rollbacker.rollback_one(orphans.first)
       end
     end
   end
@@ -119,15 +119,21 @@ namespace :makimodoshi do
 
     if orphans.empty?
       $stdout.puts "[makimodoshi] No orphan migrations to rollback."
+      next
+    end
+
+    unless Makimodoshi::SchemaChecker.schema_file_changed_from_git?
+      $stdout.puts "[makimodoshi] Orphan migrations found but schema.rb has no git diff. Nothing to do."
+      next
+    end
+
+    $stdout.puts "[makimodoshi] Found #{orphans.size} orphan migration(s). Rolling back..."
+    success = Makimodoshi::Rollbacker.rollback_versions(orphans)
+    if success
+      $stdout.puts "[makimodoshi] All orphan migrations rolled back."
     else
-      $stdout.puts "[makimodoshi] Found #{orphans.size} orphan migration(s). Rolling back..."
-      success = Makimodoshi::Rollbacker.rollback_versions(orphans)
-      if success
-        $stdout.puts "[makimodoshi] All orphan migrations rolled back."
-      else
-        $stderr.puts "[makimodoshi] Some migrations failed to rollback. Check logs for details."
-        exit 1
-      end
+      $stderr.puts "[makimodoshi] Some migrations failed to rollback. Check logs for details."
+      exit 1
     end
   end
 end
