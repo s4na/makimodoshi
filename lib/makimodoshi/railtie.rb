@@ -44,14 +44,14 @@ module Makimodoshi
       end
 
       def auto_rollback!
-        orphans = SchemaChecker.orphan_versions
-        return if orphans.empty?
-
-        unless SchemaChecker.schema_file_changed_from_git?
-          Makimodoshi.logger.info(
-            "[makimodoshi] Orphan migrations found (#{orphans.join(", ")}), " \
-            "but schema.rb has no git diff. Skipping rollback."
-          )
+        orphans, reason = SchemaChecker.check_auto_rollback_preconditions
+        if reason
+          if reason == :no_git_diff
+            Makimodoshi.logger.info(
+              "[makimodoshi] Orphan migrations found (#{orphans.join(", ")}), " \
+              "but schema.rb has no git diff. Skipping rollback."
+            )
+          end
           return
         end
 

@@ -5,6 +5,21 @@ require "open3"
 module Makimodoshi
   class SchemaChecker
     class << self
+      # 自動ロールバックの前提条件チェック。
+      # 戻り値: [orphans, reason]
+      #   - 条件を満たす場合: [orphan_versions の配列, nil]
+      #   - orphan なし: [[], :no_orphans]
+      #   - git diff なし: [orphan_versions の配列, :no_git_diff]
+      #
+      # orphans は reason が :no_git_diff の場合もログ出力用に返される。
+      def check_auto_rollback_preconditions
+        orphans = orphan_versions
+        return [orphans, :no_orphans] if orphans.empty?
+        return [orphans, :no_git_diff] unless schema_file_changed_from_git?
+
+        [orphans, nil]
+      end
+
       # excess_versions のうち、マイグレーションファイルが存在しないものだけを返す。
       # ファイルが存在する = 通常の db:migrate 実行直後なのでロールバック不要。
       def orphan_versions

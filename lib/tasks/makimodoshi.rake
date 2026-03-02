@@ -12,13 +12,11 @@ task makimodoshi: :environment do
     exit 1
   end
 
-  initial_orphans = Makimodoshi::SchemaChecker.orphan_versions
-  if initial_orphans.empty?
+  initial_orphans, reason = Makimodoshi::SchemaChecker.check_auto_rollback_preconditions
+  if reason == :no_orphans
     $stdout.puts "[makimodoshi] No orphan migrations (all excess migrations have files). Nothing to do."
     next
-  end
-
-  unless Makimodoshi::SchemaChecker.schema_file_changed_from_git?
+  elsif reason == :no_git_diff
     $stdout.puts "[makimodoshi] Orphan migrations found but schema.rb has no git diff. Nothing to do."
     next
   end
@@ -29,6 +27,7 @@ task makimodoshi: :environment do
   previous_orphan_first = nil
 
   loop do
+    # ロールバック後のDB状態を反映するため、毎回再取得する
     orphans = Makimodoshi::SchemaChecker.orphan_versions
     if orphans.empty?
       if Makimodoshi::SchemaDiffDetector.schema_matches?
@@ -119,14 +118,11 @@ namespace :makimodoshi do
       exit 1
     end
 
-    orphans = Makimodoshi::SchemaChecker.orphan_versions
-
-    if orphans.empty?
+    orphans, reason = Makimodoshi::SchemaChecker.check_auto_rollback_preconditions
+    if reason == :no_orphans
       $stdout.puts "[makimodoshi] No orphan migrations to rollback."
       next
-    end
-
-    unless Makimodoshi::SchemaChecker.schema_file_changed_from_git?
+    elsif reason == :no_git_diff
       $stdout.puts "[makimodoshi] Orphan migrations found but schema.rb has no git diff. Nothing to do."
       next
     end

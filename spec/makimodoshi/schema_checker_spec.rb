@@ -151,10 +151,7 @@ RSpec.describe Makimodoshi::SchemaChecker do
     end
   end
 
-  # auto_rollback! の判定ロジックに関連する統合シナリオ。
-  # orphan_versions と schema_file_changed_from_git? の組み合わせによって
-  # ロールバック要否が決まることを確認する。
-  describe "auto rollback scenarios" do
+  describe ".check_auto_rollback_preconditions" do
     let(:migrate_dir) { Rails.root.join("db", "migrate") }
 
     before do
@@ -177,8 +174,10 @@ RSpec.describe Makimodoshi::SchemaChecker do
         File.write(migrate_dir.join("20240201000000_create_users.rb"), "")
       end
 
-      it "orphan_versions が空のためロールバック不要" do
-        expect(described_class.orphan_versions).to be_empty
+      it "空の orphans と :no_orphans を返す" do
+        orphans, reason = described_class.check_auto_rollback_preconditions
+        expect(orphans).to be_empty
+        expect(reason).to eq(:no_orphans)
       end
     end
 
@@ -190,9 +189,10 @@ RSpec.describe Makimodoshi::SchemaChecker do
         allow(described_class).to receive(:git_diff_schema).and_return("")
       end
 
-      it "orphan_versions は検出されるが git diff がないためロールバックすべきでない" do
-        expect(described_class.orphan_versions).to eq(["20240201000000"])
-        expect(described_class.schema_file_changed_from_git?).to be false
+      it "orphans と :no_git_diff を返す（ログ出力用に orphans も含まれる）" do
+        orphans, reason = described_class.check_auto_rollback_preconditions
+        expect(orphans).to eq(["20240201000000"])
+        expect(reason).to eq(:no_git_diff)
       end
     end
 
@@ -204,9 +204,10 @@ RSpec.describe Makimodoshi::SchemaChecker do
         allow(described_class).to receive(:git_diff_schema).and_return("diff --git ...")
       end
 
-      it "orphan_versions が検出され git diff もあるためロールバック対象" do
-        expect(described_class.orphan_versions).to eq(["20240201000000"])
-        expect(described_class.schema_file_changed_from_git?).to be true
+      it "orphans と nil（reason なし）を返す" do
+        orphans, reason = described_class.check_auto_rollback_preconditions
+        expect(orphans).to eq(["20240201000000"])
+        expect(reason).to be_nil
       end
     end
 
@@ -220,9 +221,10 @@ RSpec.describe Makimodoshi::SchemaChecker do
         allow(described_class).to receive(:git_diff_schema).and_return("diff --git ...")
       end
 
-      it "orphan のみがロールバック対象になる" do
-        expect(described_class.orphan_versions).to eq(["20240301000000"])
-        expect(described_class.schema_file_changed_from_git?).to be true
+      it "orphan のみを返す" do
+        orphans, reason = described_class.check_auto_rollback_preconditions
+        expect(orphans).to eq(["20240301000000"])
+        expect(reason).to be_nil
       end
     end
   end
