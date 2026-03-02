@@ -51,7 +51,7 @@ RSpec.describe Makimodoshi::SchemaChecker do
     end
   end
 
-  describe ".excess_versions" do
+  describe ".excess_versions (private)" do
     before do
       File.write(schema_file, <<~RUBY)
         ActiveRecord::Schema[7.0].define(version: 20240101000000) do
@@ -65,7 +65,7 @@ RSpec.describe Makimodoshi::SchemaChecker do
       conn.execute("INSERT INTO schema_migrations (version) VALUES ('20240201000000')")
       conn.execute("INSERT INTO schema_migrations (version) VALUES ('20240301000000')")
 
-      excess = described_class.excess_versions
+      excess = described_class.send(:excess_versions)
       expect(excess).to eq(["20240301000000", "20240201000000"])
     end
 
@@ -73,11 +73,11 @@ RSpec.describe Makimodoshi::SchemaChecker do
       conn = ActiveRecord::Base.connection
       conn.execute("INSERT INTO schema_migrations (version) VALUES ('20240101000000')")
 
-      expect(described_class.excess_versions).to be_empty
+      expect(described_class.send(:excess_versions)).to be_empty
     end
 
     it "returns empty array when DB is behind schema.rb" do
-      expect(described_class.excess_versions).to be_empty
+      expect(described_class.send(:excess_versions)).to be_empty
     end
   end
 

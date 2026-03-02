@@ -3,10 +3,10 @@
 require "spec_helper"
 require "fileutils"
 
-# Railtie のクラスメソッドのみテストする（Rails 初期化フックは対象外）
-RSpec.describe "Makimodoshi::Railtie.auto_rollback!" do
-  # Railtie クラスを定義していない環境でもテストできるよう、
-  # auto_rollback! ロジックを直接呼び出す形でテストする
+# auto_rollback! の判定ロジック should_auto_rollback? をテストする。
+# should_auto_rollback? は SchemaChecker に定義されており、
+# Railtie.auto_rollback! から呼び出される。
+RSpec.describe "Makimodoshi::SchemaChecker.should_auto_rollback?" do
   let(:schema_dir) { Rails.root.join("db") }
   let(:schema_file) { schema_dir.join("schema.rb") }
   let(:migrate_dir) { Rails.root.join("db", "migrate") }
@@ -25,25 +25,6 @@ RSpec.describe "Makimodoshi::Railtie.auto_rollback!" do
     FileUtils.rm_rf(migrate_dir)
   end
 
-  # auto_rollback! のロジックを再現するヘルパー
-  #
-  # 制約: Railtie 本体は Rails::Railtie 継承が必要であり、テスト環境での
-  # 完全な初期化が困難なため、ロジックだけ抽出してテストしている。
-  # auto_rollback! 本体のロジックを変更した場合は、このヘルパーも
-  # 必ず同期して更新すること。
-  # TODO: Railtie の初期化なしに auto_rollback! を直接呼び出せる構成への
-  #       リファクタリングを検討する。
-  def auto_rollback_logic
-    orphans = Makimodoshi::SchemaChecker.orphan_versions
-    return :no_orphans if orphans.empty?
-
-    unless Makimodoshi::SchemaChecker.schema_file_changed_from_git?
-      return :no_git_diff
-    end
-
-    :should_rollback
-  end
-
   context "excess versions があるがすべてマイグレーションファイルが存在する場合" do
     before do
       conn = ActiveRecord::Base.connection
@@ -52,8 +33,8 @@ RSpec.describe "Makimodoshi::Railtie.auto_rollback!" do
       File.write(migrate_dir.join("20240201000000_create_users.rb"), "")
     end
 
-    it "ロールバックしない" do
-      expect(auto_rollback_logic).to eq(:no_orphans)
+    it "nil を返す（ロールバック不要）" do
+      expect(Makimodoshi::SchemaChecker.should_auto_rollback?).to be_nil
     end
   end
 
@@ -65,8 +46,8 @@ RSpec.describe "Makimodoshi::Railtie.auto_rollback!" do
       allow(Makimodoshi::SchemaChecker).to receive(:git_diff_schema).and_return("")
     end
 
-    it "ロールバックしない" do
-      expect(auto_rollback_logic).to eq(:no_git_diff)
+    it "nil を返す（ロールバック不要）" do
+      expect(Makimodoshi::SchemaChecker.should_auto_rollback?).to be_nil
     end
   end
 
@@ -78,8 +59,9 @@ RSpec.describe "Makimodoshi::Railtie.auto_rollback!" do
       allow(Makimodoshi::SchemaChecker).to receive(:git_diff_schema).and_return("diff --git ...")
     end
 
-    it "ロールバックすべきと判定する" do
-      expect(auto_rollback_logic).to eq(:should_rollback)
+    it "orphan versions を返す（ロールバック対象）" do
+      result = Makimodoshi::SchemaChecker.should_auto_rollback?
+      expect(result).to eq(["20240201000000"])
     end
   end
 
@@ -95,10 +77,9 @@ RSpec.describe "Makimodoshi::Railtie.auto_rollback!" do
       allow(Makimodoshi::SchemaChecker).to receive(:git_diff_schema).and_return("diff --git ...")
     end
 
-    it "orphan のみがロールバック対象になる" do
-      orphans = Makimodoshi::SchemaChecker.orphan_versions
-      expect(orphans).to eq(["20240301000000"])
-      expect(auto_rollback_logic).to eq(:should_rollback)
+    it "orphan のみを返す" do
+      result = Makimodoshi::SchemaChecker.should_auto_rollback?
+      expect(result).to eq(["20240301000000"])
     end
   end
 end

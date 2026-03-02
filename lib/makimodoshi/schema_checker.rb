@@ -5,12 +5,14 @@ require "open3"
 module Makimodoshi
   class SchemaChecker
     class << self
-      def excess_versions
-        schema_version = read_schema_version
-        return [] unless schema_version
+      # orphan migration の有無と git diff の状態から、自動ロールバックすべきか判定する。
+      # ロールバック対象の orphan versions を返す。ロールバック不要なら nil を返す。
+      def should_auto_rollback?
+        orphans = orphan_versions
+        return nil if orphans.empty?
+        return nil unless schema_file_changed_from_git?
 
-        db_versions = read_db_versions
-        db_versions.select { |v| v > schema_version }.sort.reverse
+        orphans
       end
 
       # excess_versions のうち、マイグレーションファイルが存在しないものだけを返す。
@@ -41,8 +43,17 @@ module Makimodoshi
       # `git diff HEAD` はワーキングツリーと HEAD の差分を比較する。
       # ブランチ切り替え直後は HEAD が切り替え先ブランチを指すため、
       # 切り替え先の schema.rb と HEAD が一致し diff が空になる場合がある。
-      # ただし、その場合でも orphan migration は excess_versions から
-      # 正しく検出されるため、次回の schema.rb 変更時にロールバックされる。
+      #
+      # 例: ブランチ A で migration 実行後、git checkout branch-B すると、
+      #   - schema.rb は branch-B のものに切り替わる
+      #   - git diff HEAD は空（HEAD = branch-B）
+      #   - orphan migration は検出されるが、git diff がないためロールバックされない
+      #   - ユーザーが `rails makimodoshi:rollback` を手動実行するか、
+      #     schema.rb が別途変更されるまで orphan は残り続ける
+      #
+      # この挙動は意図的で、ブランチ切り替え直後に意図しないロールバックが
+      # 走ることを防いでいる。手動コマンドでは git diff チェックを省略するため、
+      # ユーザーは必要に応じて明示的にロールバックできる。
       def git_diff_schema
         output, status = Open3.capture2(
           "git", "-C", Rails.root.to_s, "diff", "HEAD", "--", "db/schema.rb",
@@ -71,6 +82,18 @@ module Makimodoshi
         Makimodoshi.connection
           .select_values("SELECT version FROM schema_migrations")
           .map(&:to_s)
+      end
+
+      private
+
+      # schema.rb のバージョンより新しい DB バージョンを返す（内部用）。
+      # 外部からは orphan_versions を使うこと。
+      def excess_versions
+        schema_version = read_schema_version
+        return [] unless schema_version
+
+        db_versions = read_db_versions
+        db_versions.select { |v| v > schema_version }.sort.reverse
       end
     end
   end
