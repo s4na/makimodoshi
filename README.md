@@ -105,6 +105,8 @@ $ rails makimodoshi:rollback VERSION=20240201000000
 $ rails makimodoshi:rollback_all
 ```
 
+This task uses the same `db/schema.rb` git-diff guard as automatic rollback. If orphan migrations exist but `db/schema.rb` has no git diff, use `rails makimodoshi:rollback` to roll them back intentionally, one migration at a time.
+
 ## Typical Workflow
 
 ```
