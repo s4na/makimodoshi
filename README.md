@@ -65,7 +65,7 @@ $ rails s
 ...
 ```
 
-If orphan migrations exist but `db/schema.rb` has no git diff, makimodoshi skips automatic rollback. In that case, run `rails makimodoshi:rollback` or `rails makimodoshi:rollback_all` when you intentionally want to roll them back.
+If orphan migrations exist but `db/schema.rb` has no git diff, makimodoshi skips automatic rollback. In that case, run `rails makimodoshi:rollback` when you intentionally want to roll back the most recent orphan migration.
 
 ### 3. Safety
 
@@ -113,8 +113,8 @@ $ rails db:migrate        # Migrations are applied and stored by makimodoshi
 
 $ git checkout main       # Migration files disappear, DB still has the changes
 
-$ rails makimodoshi:rollback_all
-                          # Explicitly roll back orphan migrations when schema.rb has no git diff
+$ rails makimodoshi:rollback
+                          # Explicitly roll back the most recent orphan migration when schema.rb has no git diff
 ```
 
 ## Requirements
