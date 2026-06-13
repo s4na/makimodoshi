@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/s4na/makimodoshi/actions/workflows/ci.yml/badge.svg)](https://github.com/s4na/makimodoshi/actions/workflows/ci.yml)
 
-**makimodoshi** is a Rails gem that automatically rolls back excess database migrations when starting `rails s`. It solves the common pain point of branch switching leaving behind applied migrations that no longer exist in the current branch.
+**makimodoshi** is a Rails gem that helps roll back orphaned database migrations that no longer exist in the current branch. It solves the common pain point of branch switching leaving behind applied migrations after their files disappear.
 
 ## The Problem
 
@@ -17,7 +17,7 @@ The usual fix is `db:rollback` (hoping the files still exist) or `db:reset` (los
 
 ## The Solution
 
-makimodoshi hooks into `rails s` startup and automatically detects when the database is ahead of `schema.rb`. When it finds excess migrations, it rolls them back using stored migration source code — even if the original migration files have been deleted by a branch switch.
+makimodoshi stores migration source code when migrations are applied, then uses that stored source to roll back orphan migrations when needed — even if the original migration files have been deleted by a branch switch.
 
 ## Installation
 
@@ -50,12 +50,12 @@ Every time you run `db:migrate`, makimodoshi saves a copy of each migration's so
 
 ### 2. Automatic Rollback (`rails s`)
 
-When `rails s` starts, makimodoshi compares the `schema.rb` version with the database's `schema_migrations` table. If the DB is ahead, it automatically rolls back the excess migrations using the stored source code.
+When `rails s` starts, makimodoshi compares the `schema.rb` version with the database's `schema_migrations` table. If the DB is ahead, the excess migration files are missing, and `db/schema.rb` has a git diff, it automatically rolls back the orphan migrations using the stored source code.
 
 ```
 $ rails s
-[makimodoshi] DB is ahead of schema.rb by 2 migration(s): 20240301000000, 20240201000000
-[makimodoshi] Auto-rolling back...
+[makimodoshi] schema.rb has git diff and 2 orphan migration(s) without files: 20240301000000, 20240201000000
+[makimodoshi] Auto-rolling back to align with git schema...
 [makimodoshi] Rolling back 20240301000000 (20240301000000_add_tags_to_posts.rb)...
 [makimodoshi] Rolled back 20240301000000.
 [makimodoshi] Rolling back 20240201000000 (20240201000000_create_comments.rb)...
@@ -65,11 +65,14 @@ $ rails s
 ...
 ```
 
+If orphan migrations exist but `db/schema.rb` has no git diff, makimodoshi skips automatic rollback. In that case, run `rails makimodoshi:rollback` when you intentionally want to roll back the most recent orphan migration.
+
 ### 3. Safety
 
 - **Development only**: All DB operations are restricted to `Rails.env.development?`. In any other environment, the gem does nothing and prints a warning.
 - **No schema pollution**: The hidden table is excluded from `schema.rb` via `SchemaDumper.ignore_tables`.
 - **No-op when in sync**: If the DB matches `schema.rb`, startup cost is minimal (one file read + one DB query).
+- **Git diff guard**: Automatic rollback only runs when `db/schema.rb` has a git diff, avoiding surprise rollback immediately after a branch checkout.
 
 ## Rake Tasks
 
@@ -96,11 +99,13 @@ Roll back a specific version:
 $ rails makimodoshi:rollback VERSION=20240201000000
 ```
 
-### Rollback all excess migrations
+### Rollback all orphan migrations
 
 ```
 $ rails makimodoshi:rollback_all
 ```
+
+This task uses the same `db/schema.rb` git-diff guard as automatic rollback. If orphan migrations exist but `db/schema.rb` has no git diff, use `rails makimodoshi:rollback` to roll them back intentionally, one migration at a time.
 
 ## Typical Workflow
 
@@ -110,12 +115,14 @@ $ rails db:migrate        # Migrations are applied and stored by makimodoshi
 
 $ git checkout main       # Migration files disappear, DB still has the changes
 
-$ rails s                 # makimodoshi detects the mismatch and auto-rolls back
+$ rails makimodoshi:rollback
+                          # Explicitly roll back the most recent orphan migration when schema.rb has no git diff
+# Repeat as needed when multiple orphan migrations remain
 ```
 
 ## Requirements
 
-- Ruby >= 2.7
+- Ruby >= 3.0
 - Rails >= 6.1
 - `schema.rb` based projects (`structure.sql` is not supported)
 
