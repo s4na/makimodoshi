@@ -54,8 +54,8 @@ When `rails s` starts, makimodoshi compares the `schema.rb` version with the dat
 
 ```
 $ rails s
-[makimodoshi] DB is ahead of schema.rb by 2 migration(s): 20240301000000, 20240201000000
-[makimodoshi] Auto-rolling back...
+[makimodoshi] schema.rb has git diff and 2 orphan migration(s) without files: 20240301000000, 20240201000000
+[makimodoshi] Auto-rolling back to align with git schema...
 [makimodoshi] Rolling back 20240301000000 (20240301000000_add_tags_to_posts.rb)...
 [makimodoshi] Rolled back 20240301000000.
 [makimodoshi] Rolling back 20240201000000 (20240201000000_create_comments.rb)...
@@ -99,7 +99,7 @@ Roll back a specific version:
 $ rails makimodoshi:rollback VERSION=20240201000000
 ```
 
-### Rollback all excess migrations
+### Rollback all orphan migrations
 
 ```
 $ rails makimodoshi:rollback_all
@@ -117,6 +117,7 @@ $ git checkout main       # Migration files disappear, DB still has the changes
 
 $ rails makimodoshi:rollback
                           # Explicitly roll back the most recent orphan migration when schema.rb has no git diff
+# Repeat as needed when multiple orphan migrations remain
 ```
 
 ## Requirements
